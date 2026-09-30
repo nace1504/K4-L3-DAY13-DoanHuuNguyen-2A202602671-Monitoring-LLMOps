@@ -1,0 +1,138 @@
+# Trace metadata — trace_id=9e18aad4fcb5f47130d5cbf02013d15d, correlation_id=req-50ee8a6a
+# Nguồn: Langfuse v2 observations API. Đã bỏ các metadata kỹ thuật scope.* / resourceAttributes.* do SDK/OTel tự gắn (trong đó có public key).
+
+## Cây observation
+trace day13-agent-request
+  └─ lab-agent-run [AGENT] latency=0.152s
+       └─ llm-generation [GENERATION] latency=0.151s model=claude-sonnet-4-5 usage={'input': 35, 'output': 178, 'total': 213} cost={'input': 0.000105, 'output': 0.00267, 'total': 0.002775} prompt=day13-chat v1
+       └─ retrieval [RETRIEVER] latency=0.0s
+
+## Observations (đầy đủ)
+{
+  "id": "807900b1e2c1cb37",
+  "name": "lab-agent-run",
+  "type": "AGENT",
+  "parentObservationId": null,
+  "startTime": "2026-09-30T03:08:51.512000Z",
+  "endTime": "2026-09-30T03:08:51.664000Z",
+  "latency": 0.152,
+  "level": "DEFAULT",
+  "statusMessage": "",
+  "version": "1",
+  "model": "",
+  "input": null,
+  "output": null,
+  "usageDetails": {},
+  "costDetails": {},
+  "totalCost": null,
+  "promptName": "",
+  "promptVersion": null,
+  "userId": "95b6504a8bd6",
+  "sessionId": "s02",
+  "environment": "dev",
+  "parent_name": null,
+  "metadata": {
+    "correlation_id": "req-50ee8a6a",
+    "model": "claude-sonnet-4-5",
+    "feature": "qa",
+    "prompt_fetch_error": "",
+    "prompt_source": "langfuse",
+    "prompt_version": 1,
+    "prompt_label": "production",
+    "prompt_name": "day13-chat",
+    "query_preview": "Explain why metrics traces and logs work together",
+    "doc_count": 1
+  }
+}
+{
+  "id": "d641208b641821ad",
+  "name": "llm-generation",
+  "type": "GENERATION",
+  "parentObservationId": "807900b1e2c1cb37",
+  "startTime": "2026-09-30T03:08:51.513000Z",
+  "endTime": "2026-09-30T03:08:51.664000Z",
+  "latency": 0.151,
+  "level": "DEFAULT",
+  "statusMessage": "",
+  "version": "",
+  "model": "claude-sonnet-4-5",
+  "input": "Feature=qa    Docs=No domain document matched. Use general fallback answer.    Q...",
+  "output": "Starter answer. You should improve this output logic and add better quality chec...",
+  "usageDetails": {
+    "input": 35,
+    "output": 178,
+    "total": 213
+  },
+  "costDetails": {
+    "input": 0.000105,
+    "output": 0.00267,
+    "total": 0.002775
+  },
+  "totalCost": 0.002775,
+  "promptName": "day13-chat",
+  "promptVersion": 1,
+  "userId": "95b6504a8bd6",
+  "sessionId": "s02",
+  "environment": "dev",
+  "parent_name": "lab-agent-run",
+  "metadata": {
+    "correlation_id": "req-50ee8a6a",
+    "model": "claude-sonnet-4-5",
+    "feature": "qa",
+    "ttft_ms": 50
+  }
+}
+{
+  "id": "38beadd45e40655f",
+  "name": "retrieval",
+  "type": "RETRIEVER",
+  "parentObservationId": "807900b1e2c1cb37",
+  "startTime": "2026-09-30T03:08:51.513000Z",
+  "endTime": "2026-09-30T03:08:51.513000Z",
+  "latency": 0.0,
+  "level": "DEFAULT",
+  "statusMessage": "",
+  "version": "",
+  "model": "",
+  "input": null,
+  "output": null,
+  "usageDetails": {},
+  "costDetails": {},
+  "totalCost": null,
+  "promptName": "",
+  "promptVersion": null,
+  "userId": "95b6504a8bd6",
+  "sessionId": "s02",
+  "environment": "dev",
+  "parent_name": "lab-agent-run",
+  "metadata": {
+    "correlation_id": "req-50ee8a6a",
+    "model": "claude-sonnet-4-5",
+    "feature": "qa"
+  }
+}
+
+## Log line response_sent cùng correlation_id (req-50ee8a6a) trong data/logs.jsonl
+{
+  "service": "api",
+  "latency_ms": 151,
+  "ttft_ms": 50,
+  "tokens_in": 35,
+  "tokens_out": 178,
+  "cost_usd": 0.002775,
+  "quality_score": 0.8,
+  "tool_name": "retrieval",
+  "tool_success": true,
+  "payload": {
+    "answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."
+  },
+  "event": "response_sent",
+  "model": "claude-sonnet-4-5",
+  "user_id_hash": "95b6504a8bd6",
+  "env": "dev",
+  "session_id": "s02",
+  "feature": "qa",
+  "correlation_id": "req-50ee8a6a",
+  "level": "info",
+  "ts": "2026-09-30T03:08:51.664110Z"
+}

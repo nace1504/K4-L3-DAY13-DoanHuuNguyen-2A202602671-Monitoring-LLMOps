@@ -23,10 +23,10 @@
 | Dashboard validator | `evidence/03-dashboard-validator.png` |
 | Structured log | `evidence/04-structured-log.txt` |
 | PII redaction | `evidence/05-pii-redaction.txt` |
-| Trace list | `evidence/06-trace-list.png` |
+| Trace list | `evidence/06-trace-list.txt` |
 | Trace waterfall | `evidence/07-trace-waterfall.png` |
-| Trace metadata | `evidence/08-trace-metadata.png` |
-| Prompt versions | `evidence/09-prompt-versions.png` |
+| Trace metadata | `evidence/08-trace-metadata.txt` |
+| Prompt versions | `evidence/09a-prompt-v1-production-baseline.png`, `evidence/09b-prompt-v2-candidate.png` |
 | Prompt rollback | `evidence/10-prompt-rollback.png` |
 | Dashboard runtime | `evidence/11-dashboard-overview.png` |
 | Incident metric | `evidence/12-incident-metric.png` |
@@ -40,7 +40,7 @@
 | `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
 | `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | | Dashboard contract đủ 6 panel |
 | `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 30 passed ([log](evidence/01-pytest-cp1.txt)) | +8 test: PII (CCCD, thẻ, passport, câu 4 loại) và middleware |
-| Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | | Prompt `day13-chat` (label `production`) trả 404 → `local-fallback` |
+| Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | 20/20 ([list](evidence/06-trace-list.txt)) | Baseline: prompt `day13-chat` (label `production`) trả 404 → `local-fallback`. CP2a: 20 trace từ 2 lần load test, trace nào cũng có `lab-agent-run → {retrieval, llm-generation}`, `prompt_source=langfuse`, v1, generation có model/usage/cost, không có PII thô |
 | Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
 | Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | | 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt |
 | Retrieval success rate | 100% (10/10) ([metrics](evidence/baseline/baseline-metrics.txt)) | | |
@@ -54,12 +54,12 @@
 
 ## 5. Tracing và prompt versioning
 
-- **Cách xác nhận traces do chính tôi tạo trong project cá nhân:**
-- **Cấu trúc root/retrieval/generation observations:**
-- **Cách nối trace với log:**
-- **Prompt name:**
-- **Version/label baseline:**
-- **Version/label candidate:**
+- **Cách xác nhận traces do chính tôi tạo trong project cá nhân:** Dùng key của project `day13-k4-l3b-2A202602671` (nạp từ `.env`) để query Langfuse `GET /api/public/v2/observations` từ thời điểm bắt đầu load test (2026-09-30T03:08:49Z). Kết quả có 20 trace; `metadata.correlation_id` của từng trace khớp với các ID `req-xxxxxxxx` mà `scripts/load_test.py` in ra và với `data/logs.jsonl` ([06](evidence/06-trace-list.txt)).
+- **Cấu trúc root/retrieval/generation observations:** Trace `day13-agent-request` (đặt tên qua `propagate_attributes`) có root observation `lab-agent-run` (AGENT), mang metadata prompt name/label/version/source, `doc_count`, `query_preview`. Root có 2 con: `retrieval` (RETRIEVER, bọc `retrieve()`) và `llm-generation` (GENERATION, bọc `FakeLLM.generate`). Generation nhận `model`, `usage_details` input/output, `cost_details` input/output/total (đơn giá $3/$15 mỗi 1M token), link tới managed prompt, và input/output đã qua `summarize_text` (scrub PII). Input/output của hai observation con đều tắt auto-capture ([08](evidence/08-trace-metadata.txt)).
+- **Cách nối trace với log:** Correlation ID từ middleware được truyền vào `LabAgent.run` rồi vào metadata của trace qua `propagate_attributes`, nên cùng một ID xuất hiện ở cả log lẫn mọi observation. Ví dụ: trace `9e18aad4fcb5f47130d5cbf02013d15d` ↔ `correlation_id=req-50ee8a6a`. Dòng `response_sent` trong `data/logs.jsonl` có `tokens_in=35`, `tokens_out=178`, `cost_usd=0.002775`, khớp đúng `usageDetails` và `costDetails.total` của generation ([08](evidence/08-trace-metadata.txt)).
+- **Prompt name:** `day13-chat`
+- **Version/label baseline:** v1 — `baseline`, `production`
+- **Version/label candidate:** v2 — `candidate`
 - **Trace ID của mỗi version:**
 - **Cách promote và rollback `production`:**
 

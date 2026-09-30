@@ -1,0 +1,26 @@
+# Trace list — Langfuse project day13-k4-l3b-2A202602671
+# Nguồn: GET /api/public/v2/observations (fromStartTime=2026-09-30T03:08:49Z), gom theo traceId.
+# Trace name (propagate_attributes): day13-agent-request; root observation: lab-agent-run.
+# Tổng: 20 traces (2 lần chạy scripts/load_test.py)
+
+trace_id                           start_time (UTC)             correlation_id prompt      ver  source    observations
+4c401fb726e58f6efd066b6c885cccd4   2026-09-30T03:08:50.317000Z  req-56216240   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+9e18aad4fcb5f47130d5cbf02013d15d   2026-09-30T03:08:51.512000Z  req-50ee8a6a   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+30bab4f0666e9be4e97ec734d40b8c70   2026-09-30T03:08:51.668000Z  req-3f4b3a6c   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+2794807fb2e8d8d9e6dec2b7186cd43b   2026-09-30T03:08:51.824000Z  req-e68e2d72   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+70b4423ad845091154b496ed8d1b660b   2026-09-30T03:08:51.981000Z  req-d1b9a79d   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+c60d54846050881fbaf8e931320662cd   2026-09-30T03:08:52.136000Z  req-605f268e   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+551c0fdbfeebd3124923d2af4121194e   2026-09-30T03:08:52.293000Z  req-3c9b42d5   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+6f0e51d27d0c7a3ef63dd323e412b97a   2026-09-30T03:08:52.447000Z  req-11f85a08   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+335234f7438ca1f7973a4eaccb58a400   2026-09-30T03:08:52.604000Z  req-181c6ab7   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+7eb2f906aff79387f36ddf97e240874c   2026-09-30T03:08:52.760000Z  req-b6076c45   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+61851ae1bc24302117f1907d98e73db1   2026-09-30T03:08:53.353000Z  req-b8782663   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+a09f7ed71dd680d967154ce64851838c   2026-09-30T03:08:53.509000Z  req-3d0a22be   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+40ef31b105eec8e17198c4256c426f53   2026-09-30T03:08:53.665000Z  req-6e1b335a   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+89d66f8ce89a27201def2f591598593a   2026-09-30T03:08:53.822000Z  req-949216b6   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+5b5b2c39eee4a364ff4a2890cbd08a17   2026-09-30T03:08:53.978000Z  req-ad638e7c   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+de23e8fd2e8044955b073454a6944e5e   2026-09-30T03:08:54.135000Z  req-eb4df792   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+e7d9c3c8f56b46fc836ee47fea176be1   2026-09-30T03:08:54.289000Z  req-efb00437   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+b7b373ff06431b375bdcc9a74728e015   2026-09-30T03:08:54.445000Z  req-9db5b6b3   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+2f8aa9f5b13c99dfdb85489a983eefea   2026-09-30T03:08:54.601000Z  req-3916ab3d   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
+d7e0f381b1387dc48de45a179cdc1f5f   2026-09-30T03:08:54.756000Z  req-33cdd3fc   day13-chat  1    langfuse  lab-agent-run -> {llm-generation,retrieval}
