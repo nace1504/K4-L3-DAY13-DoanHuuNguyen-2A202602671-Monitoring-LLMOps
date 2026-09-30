@@ -18,7 +18,7 @@
 
 | Evidence | Đường dẫn |
 |---|---|
-| Pytest cuối | [`01-pytest-cp2b.txt`](evidence/01-pytest-cp2b.txt) |
+| Pytest cuối | [`01-pytest-cp2c.txt`](evidence/01-pytest-cp2c.txt) |
 | Log validator | `evidence/02-log-validator.txt` |
 | Dashboard validator | [`03-dashboard-validator.txt`](evidence/03-dashboard-validator.txt) |
 | Structured log | `evidence/04-structured-log.txt` |
@@ -28,7 +28,7 @@
 | Trace metadata | [`08-trace-metadata.png`](evidence/08-trace-metadata.png) (root: `correlation_id=req-50ee8a6a`, prompt `day13-chat` v1 `production`), [`08b-generation-metadata.png`](evidence/08b-generation-metadata.png) (model, 213 tokens, $0.002775), [`08-trace-metadata.txt`](evidence/08-trace-metadata.txt). Dòng `scope.attributes.public_key` do SDK tự gắn đã được che đen |
 | Prompt versions | `evidence/09a-prompt-v1-production-baseline.png`, `evidence/09b-prompt-v2-candidate.png` |
 | Prompt rollback | [`10a-prompt-promote.png`](evidence/10a-prompt-promote.png) (production → v2), [`10b-prompt-rollback.png`](evidence/10b-prompt-rollback.png) (production → v1), [`10-prompt-rollback.txt`](evidence/10-prompt-rollback.txt) |
-| Dashboard runtime | `evidence/11-dashboard-overview.png` |
+| Dashboard runtime | [`11-dashboard-overview.png`](evidence/11-dashboard-overview.png) (sinh bằng `python scripts/build_dashboard.py` từ `data/logs.jsonl`, cửa sổ 60 phút 03:16–04:16 UTC, 71 request) |
 | Incident metric | `evidence/12-incident-metric.png` |
 | Incident log | `evidence/13-incident-log.png` |
 | Incident trace | `evidence/14-incident-trace.png` |
@@ -38,12 +38,12 @@
 | Nội dung | Baseline | Kết quả cuối | Nhận xét |
 |---|---|---|---|
 | `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
-| `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | 6/6 ([log](evidence/03-dashboard-validator.txt)) | Dashboard contract đủ 6 panel |
-| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 32 passed ([log](evidence/01-pytest-cp2b.txt)) | +10 test: PII (CCCD, thẻ, passport, câu 4 loại), middleware, child observations |
+| `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | 6/6 ([log](evidence/03-dashboard-validator.txt)) | Dashboard contract đủ 6 panel; dashboard runtime vẽ đúng 6 panel theo contract ([ảnh](evidence/11-dashboard-overview.png)) |
+| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 36 passed ([log](evidence/01-pytest-cp2c.txt)) | +14 test: PII (CCCD, thẻ, passport, câu 4 loại), middleware, child observations, hàm tổng hợp của dashboard |
 | Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | 20/20 ([list](evidence/06-trace-list.txt)) | Baseline: prompt `day13-chat` (label `production`) trả 404 → `local-fallback`. CP2a: 20 trace từ 2 lần load test, trace nào cũng có `lab-agent-run → {retrieval, llm-generation}`, `prompt_source=langfuse`, v1, generation có model/usage/cost, không có PII thô |
 | Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
-| Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | | 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt |
-| Retrieval success rate | 100% (10/10) ([metrics](evidence/baseline/baseline-metrics.txt)) | | |
+| Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | 6185 ms / 50 ms ([dashboard](evidence/11-dashboard-overview.png), 71 request trong 60 phút); riêng 50 request load test: 152 ms / 50 ms | Baseline: 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt. Cuối: P95 của cửa sổ vượt 3000 ms vì 9 request CP2b bị chậm (3909–11566 ms) do fetch prompt đầu tiên sau restart timeout; khi đã cache prompt, P95 còn khoảng 152 ms |
+| Retrieval success rate | 100% (10/10) ([metrics](evidence/baseline/baseline-metrics.txt)) | 100% (71/71, [dashboard](evidence/11-dashboard-overview.png)) | Không bật incident; error rate 0% (0 `request_failed`) |
 
 ## 4. Logging và PII
 
@@ -65,10 +65,10 @@
 
 ## 6. Dashboard, SLO và alerts
 
-- **Dashboard và sáu panel:**
-- **SLO và lý do chọn:**
-- **Cách tính error budget:**
-- **Ba alert và runbook tương ứng:**
+- **Dashboard và sáu panel:** `scripts/build_dashboard.py` (matplotlib) đọc duy nhất `data/logs.jsonl`, lấy title, `time_range_minutes`=60, `refresh_seconds`=30 và threshold từ `config/dashboard.yaml`. Percentile dùng lại `app.metrics.percentile`. Nó xuất lưới 3×2 ra `evidence/11-dashboard-overview.png` (2100×1150 px, `--watch` để vẽ lại mỗi 30 giây) và in bảng OK/BREACH. Sáu panel: (1) Latency P50/P95/P99 + TTFT P95 theo phút, ngưỡng P95 ≤ 3000 ms; (2) Traffic request/phút, ngưỡng ≥ 1; (3) Error rate %, breakdown `error_type` và retrieval success %, ngưỡng ≤ 2%; (4) Cost theo phút và cộng dồn, ngưỡng tổng ≤ $2.5; (5) Tổng tokens in/out, ngưỡng ≤ 50,000; (6) Quality trung bình, ngưỡng ≥ 0.75. Cửa sổ 03:16–04:16 UTC (10:16–11:16 giờ VN): 71 request, P95 6185 ms (BREACH), 1.18 req/phút, error 0%, retrieval 100%, cost $0.1476, tokens 2,682/9,304, quality 0.856.
+- **SLO và lý do chọn:** `fast_successful_requests`: 99.5% request có `response_sent` với `latency_ms <= 3000` trong 28 ngày (`config/slo.yaml`). Mock FakeLLM chỉ mất khoảng 152 ms (P95), nhưng tôi vẫn giữ 3000 ms vì LLM thật thường cần vài giây; ngưỡng này phản ánh trải nghiệm người dùng chấp nhận được, không phải tốc độ của mock. SLI dựa trên triệu chứng (chậm hoặc lỗi), không dựa trên chi tiết implementation.
+- **Cách tính error budget:** Budget = (100% − 99.5%) × số request = 0.5% × tổng `request_received`. Bad event = request không có `response_sent` trong ngưỡng: chậm hơn 3000 ms, hoặc `request_failed` (có trong total nhưng không bao giờ là good). Số thật trong `data/logs.jsonl`: 102 request, 93 good, 9 bad (đều là request CP2b chậm do fetch prompt timeout), 0 failed. Good = 91.18% < 99.5%; budget chỉ là 0.51 request, nên đã cạn (khoảng 17.6 lần budget). Quy mô ví dụ: 10,000 request trong 28 ngày thì tối đa 50 request được phép lỗi hoặc chậm.
+- **Ba alert và runbook tương ứng:** Định nghĩa trong `config/alert_rules.yaml` (symptom-based, Slack `#k4-l3b-alerts`, owner `student-2A202602671`): (1) `HighLatencyP95` warning: `p95(response_sent.latency_ms) > 3000` trong 5m, [runbook](../docs/alerts.md#alert-1); (2) `HighErrorRate` critical: `error_rate_pct > 2 or retrieval_success_pct < 90` trong 5m, [runbook](../docs/alerts.md#alert-2); (3) `CostSpike` warning: `sum(cost_usd) per 1h > 2x baseline hourly cost or avg(tokens_out) > 400` trong 10m, [runbook](../docs/alerts.md#alert-3). Runbook nào cũng đi theo thứ tự dashboard → lọc log lấy `correlation_id` → trace Langfuse, và có mitigation cụ thể (so span retrieval với generation, tắt incident, rollback prompt, fallback context, retry/circuit breaker, giới hạn `max_tokens`).
 
 > Ví dụ cách viết error budget: "SLO 99.5% trong 28 ngày nghĩa là error budget 0.5%. Nếu workload có 10,000 request thì tối đa 50 request được phép lỗi hoặc chậm hơn ngưỡng SLO."
 

@@ -7,7 +7,20 @@ primary_slo:
     total_event: 'event == "request_received"'
   target_percent: 99.5
   error_budget_percent: 0.5
-  note: Học viên phải giải thích hoặc điều chỉnh ngưỡng bằng baseline của mình. Ví dụ nếu có 10,000 request trong cửa sổ 28 ngày, error budget 0.5% nghĩa là tối đa 50 request được phép không đạt SLO.
+  note: >-
+    Baseline đo từ data/logs.jsonl (dashboard scripts/build_dashboard.py, 2026-09-30):
+    khi Langfuse ổn định, P95 latency của FakeLLM khoảng 152 ms (50 request load test 04:13–04:17 UTC,
+    P50 151 / P99 164 ms, TTFT P95 50 ms), thấp hơn rất nhiều so với ngưỡng 3000 ms.
+    Vẫn giữ 3000 ms vì LLM thật thường cần vài giây cho một câu trả lời; ngưỡng này phản ánh
+    trải nghiệm người dùng chấp nhận được, không phải tốc độ của mock.
+    Cửa sổ 60 phút gần nhất có P95 6185 ms: 9 request CP2b bị chậm (3909–11566 ms) do lần fetch
+    prompt đầu tiên sau restart tới cloud.langfuse.com bị timeout. SLI bắt đúng triệu chứng này.
+    Error budget với số liệu thật: toàn bộ log có 102 request_received, 93 good
+    (response_sent và latency_ms <= 3000), 9 bad, 0 request_failed. Good = 91.18%, thấp hơn 99.5%;
+    budget 0.5% của 102 request chỉ là 0.51 request, nên budget đã cạn (9 bad, khoảng 17.6 lần budget).
+    Ví dụ quy mô: 10,000 request trong 28 ngày thì tối đa 50 request được phép lỗi hoặc chậm hơn 3000 ms.
+    request_failed được tính là bad event: nó vẫn có request_received (nằm trong total_event)
+    nhưng không có response_sent, nên không bao giờ thành good_event.
 guardrails:
   error_rate_pct_max: 2
   daily_cost_usd_max: 2.5
