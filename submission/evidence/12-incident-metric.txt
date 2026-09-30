@@ -44,6 +44,11 @@ quality_score avg                                 0.88                  0.84    
 - Tín hiệu khác gần như không đổi: TTFT P95 50 → 50 ms, error 0% → 0%, retrieval success 100% → 100%, tokens_in 36 → 37, tokens_out 128 → 144,
   cost/request $0.00203 → $0.00227, quality 0.88 → 0.84 (bộ câu hỏi challenge khác bộ bình thường). ⇒ Triệu chứng duy nhất: LATENCY.
 
+## Đối chiếu ngưỡng challenge (chỉ đọc 2 trường latency_threshold_ms, affected_feature từ config/challenge.json)
+- latency_threshold_ms = 2000 → P95 server trong sự cố 2654 ms: BREACH (dashboard threshold 3000: OK).
+- affected_feature = monitoring → 10/10 request chậm có feature=monitoring; sau fix cùng feature chỉ còn P95 152 ms.
+- Ảnh 12/12b vẽ với: --marker "2026-09-30T04:34:12Z=incident injected" [--marker "2026-09-30T04:36:36Z=incident disabled"] --extra-threshold "latency=2000:challenge latency_threshold_ms"
+
 ## GET /metrics (snapshot trong process, cộng dồn từ lúc uvicorn khởi động 04:05Z — không chỉ riêng khoảng sự cố)
 trong sự cố: {"traffic":75,"latency_p50":151.0,"latency_p95":2652.0,"latency_p99":3909.0,"ttft_p95":50.0,"avg_cost_usd":0.0021,"total_cost_usd":0.1593,"tokens_in_total":2765,"tokens_out_total":10065,"error_breakdown":{},"quality_avg":0.8693}
 sau fix:     {"traffic":80,"latency_p50":151.0,"latency_p95":2652.0,"latency_p99":3909.0,"ttft_p95":50.0,"avg_cost_usd":0.0021,"total_cost_usd":0.1695,"tokens_in_total":2950,"tokens_out_total":10707,"error_breakdown":{},"quality_avg":0.8675}

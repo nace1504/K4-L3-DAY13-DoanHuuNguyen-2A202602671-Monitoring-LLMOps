@@ -106,3 +106,28 @@ def test_short_windows_use_10s_buckets_including_first_partial_bucket() -> None:
     assert dash.bucket_seconds_for(start, start.replace(hour=5, minute=34)) == 60
     assert buckets[0] == datetime(2026, 9, 30, 4, 33, 40, tzinfo=timezone.utc)
     assert buckets[-1] == datetime(2026, 9, 30, 4, 35, 50, tzinfo=timezone.utc)
+
+
+def test_marker_and_extra_threshold_parsing(tmp_path: Path) -> None:
+    when, label = dash.parse_marker("2026-09-30T11:34:12+07:00=incident injected")
+    assert when == datetime(2026, 9, 30, 4, 34, 12, tzinfo=timezone.utc)
+    assert label == "incident injected"
+    assert dash.parse_extra_threshold("latency=2000:challenge") == ("latency", 2000.0, "challenge")
+    assert dash.parse_extra_threshold("latency=2000") == ("latency", 2000.0, "extra threshold")
+
+    import argparse
+    import pytest
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        dash.parse_marker("2026-09-30T04:34:12Z")
+    with pytest.raises(argparse.ArgumentTypeError):
+        dash.parse_extra_threshold("latency=fast")
+
+    out = tmp_path / "dash.png"
+    summary = dash.build_once(
+        REPO_ROOT / "config" / "dashboard.yaml", _write_logs(tmp_path, _fake_rows()), out, now=False,
+        start=datetime(2026, 9, 30, 4, 0, tzinfo=timezone.utc), end=datetime(2026, 9, 30, 4, 5, tzinfo=timezone.utc),
+        markers=[(when.replace(minute=2), "incident injected")], extra_thresholds=[("latency", 2000.0, "challenge")],
+    )
+    assert out.stat().st_size > 0
+    assert summary["p95"] == 4000.0  # above the 2000 ms extra threshold

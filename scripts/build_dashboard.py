@@ -64,6 +64,24 @@ def filter_range(records: list[dict], start: datetime, end: datetime) -> list[di
     return [r for r in records if start <= r["_ts"] <= end]
 
 
+def parse_marker(value: str) -> tuple[datetime, str]:
+    """TIME=LABEL, e.g. 2026-09-30T04:34:12Z=incident injected."""
+    ts, sep, label = value.partition("=")
+    if not sep or not label:
+        raise argparse.ArgumentTypeError(f"marker must be TIME=LABEL: {value!r}")
+    return parse_cli_time(ts), label
+
+
+def parse_extra_threshold(value: str) -> tuple[str, float, str]:
+    """PANEL=VALUE[:LABEL], e.g. latency=2000:challenge latency_threshold_ms."""
+    panel, sep, rest = value.partition("=")
+    number, _, label = rest.partition(":")
+    try:
+        return panel, float(number), label or "extra threshold"
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"extra threshold must be PANEL=VALUE[:LABEL]: {value!r}") from exc
+
+
 def parse_cli_time(value: str) -> datetime:
     """ISO time with an explicit offset, e.g. 2026-09-30T04:10:00Z or 2026-09-30T11:10:00+07:00."""
     try:
@@ -170,6 +188,8 @@ def load_config(path: Path) -> dict:
 def render(
     cfg: dict, records: list[dict], start: datetime, end: datetime, summary: dict, out: Path,
     window_label: str | None = None,
+    markers: list[tuple[datetime, str]] | None = None,
+    extra_thresholds: list[tuple[str, float, str]] | None = None,
 ) -> None:
     import matplotlib
 
@@ -200,11 +220,21 @@ def render(
         sign = "≤" if th["operator"] == "lte" else "≥"
         ax.axhline(th["value"], color="#d62728", linestyle="--", linewidth=1.5,
                    label=f"threshold {th['aggregation']} {sign} {th['value']:,} {label_unit}")
+        for panel, value, label in extra_thresholds or []:
+            if panel == panel_id:
+                ax.axhline(value, color="#ff7f0e", linestyle=":", linewidth=2,
+                           label=f"{label} {sign} {value:,g} {label_unit}")
 
     def status_text(ax, panel_id: str, text: str) -> None:
         th = panels[panel_id]["threshold"]
         ok = passes(panel_values(summary)[panel_id], th["operator"], th["value"])
         verdict = {True: "OK", False: "BREACH", None: "NO DATA"}[ok]
+        for panel, value, label in extra_thresholds or []:
+            if panel == panel_id:
+                extra_ok = passes(panel_values(summary)[panel_id], th["operator"], value)
+                extra_verdict = {True: "OK", False: "BREACH", None: "NO DATA"}[extra_ok]
+                text += f"\n{label} {value:,g}: {extra_verdict}"
+                ok = ok and extra_ok
         color = {True: "#2ca02c", False: "#d62728", None: "#7f7f7f"}[ok]
         ax.text(0.01, 0.98, f"[{verdict}] {text}", transform=ax.transAxes, va="top", fontsize=10,
                 color=color, fontweight="bold",
@@ -215,6 +245,11 @@ def render(
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M" + (":%S" if secs < 60 else ""), tz=timezone.utc))
         ax.set_xlabel("time (UTC)")
         ax.grid(alpha=0.3)
+        for when, label in markers or []:
+            if start <= when <= end:
+                ax.axvline(when, color="#555555", linestyle="-.", linewidth=1.3)
+                ax.text(when, 0.5, f" {label} {when:%H:%M:%S}Z", transform=ax.get_xaxis_transform(),
+                        rotation=90, va="center", ha="right", fontsize=8, color="#333333")
 
     # 1. Latency
     ax = axes[0][0]
@@ -225,6 +260,9 @@ def render(
     ax.plot(xs, [percentile([r["ttft_ms"] for r in resp[b]], 95) for b in xs], ":d", ms=4, label="TTFT P95")
     threshold_line(ax, "latency", "ms")
     ax.set_yscale("log")
+    # Headroom above the highest line keeps the status box from hiding the data.
+    top = max([panels["latency"]["threshold"]["value"]] + [r["latency_ms"] for b in xs for r in resp[b]])
+    ax.set_ylim(top=top * 8)
     ax.set_ylabel("latency (ms, log scale)")
     status_text(ax, "latency", f"window P50 {summary['p50']:.0f} · P95 {summary['p95']:.0f} · "
                 f"P99 {summary['p99']:.0f} · TTFT P95 {summary['ttft_p95']:.0f} ms")
@@ -347,6 +385,8 @@ def print_summary(cfg: dict, summary: dict, start: datetime, end: datetime) -> N
 def build_once(
     config: Path, logs: Path, output: Path, now: bool,
     start: datetime | None = None, end: datetime | None = None,
+    markers: list[tuple[datetime, str]] | None = None,
+    extra_thresholds: list[tuple[str, float, str]] | None = None,
 ) -> dict:
     cfg = load_config(config)
     records = load_records(logs)
@@ -364,8 +404,19 @@ def build_once(
     else:
         window, start, end = filter_window(records, minutes, datetime.now(timezone.utc) if now else None)
     summary = summarize(window, minutes)
-    render(cfg, window, start, end, summary, output, window_label)
+    unknown = {panel for panel, _, _ in extra_thresholds or []} - set(cfg["panels_by_id"])
+    if unknown:
+        raise SystemExit(f"--extra-threshold: unknown panel(s) {sorted(unknown)}")
+    render(cfg, window, start, end, summary, output, window_label, markers, extra_thresholds)
     print_summary(cfg, summary, start, end)
+    values = panel_values(summary)
+    for panel, value, label in extra_thresholds or []:
+        op = cfg["panels_by_id"][panel]["threshold"]["operator"]
+        ok = passes(values[panel], op, value)
+        print(f"extra     {panel}: {label} {'<=' if op == 'lte' else '>='} {value:,g} → "
+              f"{ {True: 'OK', False: 'BREACH', None: 'NO DATA'}[ok]} (value {values[panel]})")
+    for when, label in markers or []:
+        print(f"marker    {when:%Y-%m-%d %H:%M:%S}Z ({when.astimezone(VN_TZ):%H:%M:%S} UTC+7) {label}")
     print(f"saved {output}")
     return summary
 
@@ -381,16 +432,22 @@ def main() -> None:
                         help="window start, ISO with offset (...Z for UTC or ...+07:00 for Vietnam time)")
     parser.add_argument("--end", type=parse_cli_time,
                         help="window end, ISO with offset; defaults to start + time_range_minutes")
+    parser.add_argument("--marker", type=parse_marker, action="append", default=[],
+                        help="vertical event line TIME=LABEL (repeatable)")
+    parser.add_argument("--extra-threshold", type=parse_extra_threshold, action="append", default=[],
+                        help="additional threshold line PANEL=VALUE[:LABEL] (repeatable)")
     parser.add_argument("--now", action="store_true", help="end the window at the current time instead of the newest record")
     parser.add_argument("--watch", action="store_true", help="re-render every refresh_seconds")
     args = parser.parse_args()
 
-    build_once(args.config, args.logs, args.output, args.now, args.start, args.end)
+    build_once(args.config, args.logs, args.output, args.now, args.start, args.end,
+                   args.marker, args.extra_threshold)
     if args.watch:
         refresh = load_config(args.config)["refresh_seconds"]
         while True:
             time.sleep(refresh)
-            build_once(args.config, args.logs, args.output, args.now, args.start, args.end)
+            build_once(args.config, args.logs, args.output, args.now, args.start, args.end,
+                   args.marker, args.extra_threshold)
 
 
 if __name__ == "__main__":
