@@ -59,6 +59,22 @@ def filter_window(
     return [r for r in records if start < r["_ts"] <= end], start, end
 
 
+def filter_range(records: list[dict], start: datetime, end: datetime) -> list[dict]:
+    """Keep records in an explicit [start, end] range (both bounds inclusive)."""
+    return [r for r in records if start <= r["_ts"] <= end]
+
+
+def parse_cli_time(value: str) -> datetime:
+    """ISO time with an explicit offset, e.g. 2026-09-30T04:10:00Z or 2026-09-30T11:10:00+07:00."""
+    try:
+        parsed = parse_ts(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"not an ISO time: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise argparse.ArgumentTypeError(f"time needs a timezone (Z or +07:00): {value!r}")
+    return parsed.astimezone(timezone.utc)
+
+
 def events(records: list[dict], name: str) -> list[dict]:
     return [r for r in records if r.get("event") == name]
 
@@ -143,7 +159,10 @@ def load_config(path: Path) -> dict:
     return dashboard
 
 
-def render(cfg: dict, records: list[dict], start: datetime, end: datetime, summary: dict, out: Path) -> None:
+def render(
+    cfg: dict, records: list[dict], start: datetime, end: datetime, summary: dict, out: Path,
+    window_label: str | None = None,
+) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -157,8 +176,9 @@ def render(cfg: dict, records: list[dict], start: datetime, end: datetime, summa
 
     fig, axes = plt.subplots(2, 3, figsize=(21, 11.5), dpi=100)
     fmt = lambda d: d.strftime("%Y-%m-%d %H:%M")  # noqa: E731
+    window_label = window_label or f"last {cfg['time_range_minutes']} min"
     fig.suptitle(
-        f"{cfg['title']} — last {cfg['time_range_minutes']} min · refresh {cfg['refresh_seconds']}s\n"
+        f"{cfg['title']} — {window_label} · refresh {cfg['refresh_seconds']}s\n"
         f"{fmt(start)} → {fmt(end)} UTC  |  {fmt(start.astimezone(VN_TZ))} → {fmt(end.astimezone(VN_TZ))} giờ Việt Nam (UTC+7)"
         f"  |  {summary['requests']} requests · source: data/logs.jsonl",
         fontsize=14, fontweight="bold",
@@ -311,13 +331,27 @@ def print_summary(cfg: dict, summary: dict, start: datetime, end: datetime) -> N
               f"{ {True: 'OK', False: 'BREACH', None: 'NO DATA'}[ok]:<8} {details[panel['id']]}")
 
 
-def build_once(config: Path, logs: Path, output: Path, now: bool) -> dict:
+def build_once(
+    config: Path, logs: Path, output: Path, now: bool,
+    start: datetime | None = None, end: datetime | None = None,
+) -> dict:
     cfg = load_config(config)
     records = load_records(logs)
-    end = datetime.now(timezone.utc) if now else None
-    window, start, end = filter_window(records, cfg["time_range_minutes"], end)
-    summary = summarize(window, cfg["time_range_minutes"])
-    render(cfg, window, start, end, summary, output)
+    minutes = cfg["time_range_minutes"]
+    window_label = None
+    if start or end:
+        # Explicit range: a missing bound is filled with time_range_minutes from the other one.
+        end = end or start + timedelta(minutes=minutes)
+        start = start or end - timedelta(minutes=minutes)
+        if start >= end:
+            raise SystemExit(f"--start must be before --end ({start:%H:%M:%S} >= {end:%H:%M:%S} UTC)")
+        window = filter_range(records, start, end)
+        minutes = (end - start).total_seconds() / 60
+        window_label = f"custom window {minutes:g} min"
+    else:
+        window, start, end = filter_window(records, minutes, datetime.now(timezone.utc) if now else None)
+    summary = summarize(window, minutes)
+    render(cfg, window, start, end, summary, output, window_label)
     print_summary(cfg, summary, start, end)
     print(f"saved {output}")
     return summary
@@ -328,17 +362,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--logs", type=Path, default=DEFAULT_LOGS)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--out", "--output", dest="output", type=Path, default=DEFAULT_OUTPUT,
+                        help="PNG to write (default: submission/evidence/11-dashboard-overview.png)")
+    parser.add_argument("--start", type=parse_cli_time,
+                        help="window start, ISO with offset (...Z for UTC or ...+07:00 for Vietnam time)")
+    parser.add_argument("--end", type=parse_cli_time,
+                        help="window end, ISO with offset; defaults to start + time_range_minutes")
     parser.add_argument("--now", action="store_true", help="end the window at the current time instead of the newest record")
     parser.add_argument("--watch", action="store_true", help="re-render every refresh_seconds")
     args = parser.parse_args()
 
-    build_once(args.config, args.logs, args.output, args.now)
+    build_once(args.config, args.logs, args.output, args.now, args.start, args.end)
     if args.watch:
         refresh = load_config(args.config)["refresh_seconds"]
         while True:
             time.sleep(refresh)
-            build_once(args.config, args.logs, args.output, args.now)
+            build_once(args.config, args.logs, args.output, args.now, args.start, args.end)
 
 
 if __name__ == "__main__":

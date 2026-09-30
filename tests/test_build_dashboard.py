@@ -77,3 +77,19 @@ def test_threshold_operators_follow_config(tmp_path: Path) -> None:
     assert dash.passes(latency["value"], latency["operator"], latency["value"]) is True
     assert dash.passes(latency["value"] + 1, latency["operator"], latency["value"]) is False
     assert dash.passes(quality["value"] - 0.01, quality["operator"], quality["value"]) is False
+
+
+def test_start_end_range_accepts_utc_and_vietnam_time(tmp_path: Path) -> None:
+    records = dash.load_records(_write_logs(tmp_path, _fake_rows()))
+    start = dash.parse_cli_time("2026-09-30T11:01:00+07:00")  # = 04:01Z
+    end = dash.parse_cli_time("2026-09-30T04:03:00Z")
+
+    window = dash.filter_range(records, start, end)
+
+    assert start == datetime(2026, 9, 30, 4, 1, tzinfo=timezone.utc)
+    assert {r["ts"] for r in window} == {
+        "2026-09-30T04:01:00Z", "2026-09-30T04:02:00Z", "2026-09-30T04:03:00Z",
+    }
+    summary = dash.summarize(window, minutes=(end - start).total_seconds() / 60)
+    assert summary["requests"] == 3
+    assert summary["rate_per_minute"] == 1.5
