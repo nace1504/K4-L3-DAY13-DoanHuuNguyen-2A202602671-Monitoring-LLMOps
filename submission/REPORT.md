@@ -23,9 +23,9 @@
 | Dashboard validator | `evidence/03-dashboard-validator.png` |
 | Structured log | `evidence/04-structured-log.txt` |
 | PII redaction | `evidence/05-pii-redaction.txt` |
-| Trace list | `evidence/06-trace-list.txt` |
-| Trace waterfall | `evidence/07-trace-waterfall.png` |
-| Trace metadata | `evidence/08-trace-metadata.txt` |
+| Trace list | [`06-trace-list.png`](evidence/06-trace-list.png) (lọc `name:lab-agent-run`, Total 41 trace), [`06b-trace-list-columns.png`](evidence/06b-trace-list-columns.png), [`06-trace-list.txt`](evidence/06-trace-list.txt) |
+| Trace waterfall | [`07-trace-waterfall.png`](evidence/07-trace-waterfall.png) (trace `9e18aad4fcb5f47130d5cbf02013d15d`: `lab-agent-run` 152 ms → `retrieval` 0 ms + `llm-generation` 151 ms) |
+| Trace metadata | [`08-trace-metadata.png`](evidence/08-trace-metadata.png) (root: `correlation_id=req-50ee8a6a`, prompt `day13-chat` v1 `production`), [`08b-generation-metadata.png`](evidence/08b-generation-metadata.png) (model, 213 tokens, $0.002775), [`08-trace-metadata.txt`](evidence/08-trace-metadata.txt). Dòng `scope.attributes.public_key` do SDK tự gắn đã được che đen |
 | Prompt versions | `evidence/09a-prompt-v1-production-baseline.png`, `evidence/09b-prompt-v2-candidate.png` |
 | Prompt rollback | `evidence/10-prompt-rollback.png` |
 | Dashboard runtime | `evidence/11-dashboard-overview.png` |
