@@ -1,0 +1,52 @@
+# CP2b — Prompt versioning: cùng input, đổi label, promote rồi rollback `production`
+# Project Langfuse: day13-k4-l3b-2A202602671 · prompt: day13-chat (v1: baseline; v2: candidate, latest; production v1 → v2 → v1)
+# Input cố định: {"user_id":"u_cp2b","session_id":"s_cp2b","feature":"qa","message":"Explain why metrics traces and logs work together"} — chỉ đổi header x-request-id
+# Nguồn: data/logs.jsonl (response_sent) + Langfuse GET /api/public/v2/observations. Latency = latency của root observation lab-agent-run.
+
+## A. Bằng chứng chính
+bước                                 correlation_id              time (UTC)                  label      ver      source         trace_id                            in  out  cost_usd lat_ms
+1. baseline → v1                     req-cp2b-base4              2026-09-30T03:46:20.017435Z baseline   1        langfuse       618f8b03284480cd00e7e9db16cf38cf    35  170  0.002655    151
+2. candidate → v2                    req-cp2b-cand5              2026-09-30T04:05:12.493916Z candidate  2        langfuse       d2781bc812137e102351cfe9084ea34c    50  140   0.00225    153
+3. production → v1 (trước promote)   req-cp2b-prod1              2026-09-30T03:40:38.790013Z production 1        langfuse       210cb201102ea70f6838cb9be77efc91    35  158  0.002475   8821
+4. production → v2 (sau promote)     req-cp2b-promote            2026-09-30T04:05:53.563480Z production 2        langfuse       520149704ae014b7b3113d4834d27c60    50  126   0.00204    152
+5. production → v1 (sau rollback)    req-cp2b-rollback2          2026-09-30T04:10:02.167081Z production 1        langfuse       fc437654b400758e76a2ea91734c78d0    35  145   0.00228    153
+
+So sánh tokens_in: v1 = 35, v2 = 50 (+15, do v2 có thêm dòng "Answer in at most 3 sentences, using only the Docs below."). local-fallback = 32.
+Promote/rollback chỉ đổi label trên Langfuse UI (ảnh 10a-prompt-promote.png, 10b-prompt-rollback.png); không sửa code, không deploy.
+
+## B. Toàn bộ 21 lần thử CP2b theo thời gian (không xóa, không sửa số)
+# warm-up = request mồi sau restart để mở kết nối tới cloud.langfuse.com trước request chính.
+correlation_id              time (UTC)                  label      ver      source         trace_id                            in  out  cost_usd lat_ms  ghi chú
+req-cp2b-base               2026-09-30T03:39:51.442691Z baseline   local-v1 local-fallback 59e31ec8b179d94825f0badaa2464841    32   96  0.001536  11566  prompt fetch timeout (fetch_timeout_seconds=2) → local-fallback; thiếu span retrieval
+req-cp2b-cand               2026-09-30T03:40:13.111585Z candidate  ?        ?              MẤT (export timeout)                50  106   0.00174   3973  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-prod1              2026-09-30T03:40:38.790013Z production 1        langfuse       210cb201102ea70f6838cb9be77efc91    35  158  0.002475   8821  OK
+req-cp2b-base2              2026-09-30T03:42:19.965512Z baseline   local-v1 local-fallback e1d1e5cada4fe9d205ae6cf621d2922b    32   86  0.001386   6187  prompt fetch timeout (fetch_timeout_seconds=2) → local-fallback; thiếu span retrieval
+req-cp2b-base3              2026-09-30T03:43:42.250717Z baseline   local-v1 local-fallback 2cc941b41830dcbaebbaea3d6ad5713f    32   82  0.001326   6172  prompt fetch timeout (fetch_timeout_seconds=2) → local-fallback; thiếu span retrieval
+req-cp2b-warmup-base-1      2026-09-30T03:46:16.692734Z baseline   local-v1 local-fallback 6892dbb657ba62a6d34a7fe4288808f0    32  102  0.001626   5575  prompt fetch timeout (fetch_timeout_seconds=2) → local-fallback
+req-cp2b-warmup-base-2      2026-09-30T03:46:19.223182Z baseline   1        langfuse       6b8d7f4d103d9cfb9cc904c3b09d1516    35  117   0.00186   1858  OK
+req-cp2b-base4              2026-09-30T03:46:20.017435Z baseline   1        langfuse       618f8b03284480cd00e7e9db16cf38cf    35  170  0.002655    151  OK
+req-cp2b-warmup-cand-1      2026-09-30T03:47:11.551202Z candidate  ?        ?              MẤT (export timeout)                32  164  0.002556   6235  trace mất do OTLP export timeout; theo tokens_in=32 suy ra local-fallback
+req-cp2b-warmup-cand-2      2026-09-30T03:47:18.417849Z candidate  ?        ?              MẤT (export timeout)                32  121  0.001911   6161  trace mất do OTLP export timeout; theo tokens_in=32 suy ra local-fallback
+req-cp2b-warmup-cand-3      2026-09-30T03:47:21.054760Z candidate  ?        ?              MẤT (export timeout)                50  102   0.00168   1963  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-cand2              2026-09-30T03:47:21.871202Z candidate  ?        ?              MẤT (export timeout)                50  115  0.001875    152  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-cand3              2026-09-30T03:49:33.863775Z candidate  ?        ?              MẤT (export timeout)                50  120   0.00195    151  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-warmup-cand4-1     2026-09-30T04:03:06.993909Z candidate  ?        ?              MẤT (export timeout)                50  111  0.001815    151  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-cand4              2026-09-30T04:03:07.776986Z candidate  ?        ?              MẤT (export timeout)                50  170    0.0027    151  trace mất do OTLP export timeout; theo tokens_in=50 suy ra v2/langfuse
+req-cp2b-cand5              2026-09-30T04:05:12.493916Z candidate  2        langfuse       d2781bc812137e102351cfe9084ea34c    50  140   0.00225    153  OK
+req-cp2b-warmup-promote-1   2026-09-30T04:05:52.729962Z production 2        langfuse       70468497b8ffeb9dab88c8d19eae1214    50  163  0.002595   3910  OK
+req-cp2b-promote            2026-09-30T04:05:53.563480Z production 2        langfuse       520149704ae014b7b3113d4834d27c60    50  126   0.00204    152  OK
+req-cp2b-warmup-rollback-1  2026-09-30T04:09:17.726661Z production 2        langfuse       bc01bfeca566164c0dc0cdeb6a7f9552    50  111  0.001815    152  OK
+req-cp2b-rollback           2026-09-30T04:09:18.525010Z production 2        langfuse       c8ba1e2beb28e020b54612e4447b9c47    50   92   0.00153    152  cache TTL 60s đã hết nhưng SDK trả prompt STALE (v2) trong lúc refresh nền chưa xong (stale-while-revalidate; warm-up và request này đều nhận v2); request kế tiếp (rollback2) nhận v1
+req-cp2b-rollback2          2026-09-30T04:10:02.167081Z production 1        langfuse       fc437654b400758e76a2ea91734c78d0    35  145   0.00228    153  OK
+
+Tổng: 21 request, 13 trace lên Langfuse, 8 trace mất, 4 lần local-fallback có trace (+2 warm-up mất trace, suy ra fallback từ tokens_in=32).
+Nguyên nhân: mạng tới cloud.langfuse.com chập chờn (kết nối đầu tiên của mỗi process mất 8–64s hoặc timeout; có lúc DNS lỗi getaddrinfo).
+  - Lần fetch prompt đầu sau restart vượt fetch_timeout_seconds=2 → local-fallback (app vẫn trả 200, metadata ghi prompt_source=local-fallback).
+  - OTLP span export timeout → SDK bỏ batch ("Failed to export spans batch due to timeout, max retries or shutdown") → mất trace.
+
+## C. Dòng log response_sent tương ứng (data/logs.jsonl)
+{"service": "api", "latency_ms": 151, "ttft_ms": 50, "tokens_in": 35, "tokens_out": 170, "cost_usd": 0.002655, "quality_score": 0.8, "tool_name": "retrieval", "tool_success": true, "payload": {"answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."}, "event": "response_sent", "env": "dev", "feature": "qa", "correlation_id": "req-cp2b-base4", "user_id_hash": "a4ecde539acd", "session_id": "s_cp2b", "model": "claude-sonnet-4-5", "level": "info", "ts": "2026-09-30T03:46:20.017435Z"}
+{"service": "api", "latency_ms": 151, "ttft_ms": 50, "tokens_in": 50, "tokens_out": 140, "cost_usd": 0.00225, "quality_score": 0.8, "tool_name": "retrieval", "tool_success": true, "payload": {"answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."}, "event": "response_sent", "env": "dev", "model": "claude-sonnet-4-5", "correlation_id": "req-cp2b-cand5", "feature": "qa", "session_id": "s_cp2b", "user_id_hash": "a4ecde539acd", "level": "info", "ts": "2026-09-30T04:05:12.493916Z"}
+{"service": "api", "latency_ms": 8813, "ttft_ms": 50, "tokens_in": 35, "tokens_out": 158, "cost_usd": 0.002475, "quality_score": 0.8, "tool_name": "retrieval", "tool_success": true, "payload": {"answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."}, "event": "response_sent", "model": "claude-sonnet-4-5", "user_id_hash": "a4ecde539acd", "feature": "qa", "env": "dev", "correlation_id": "req-cp2b-prod1", "session_id": "s_cp2b", "level": "info", "ts": "2026-09-30T03:40:38.790013Z"}
+{"service": "api", "latency_ms": 152, "ttft_ms": 50, "tokens_in": 50, "tokens_out": 126, "cost_usd": 0.00204, "quality_score": 0.8, "tool_name": "retrieval", "tool_success": true, "payload": {"answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."}, "event": "response_sent", "session_id": "s_cp2b", "feature": "qa", "correlation_id": "req-cp2b-promote", "env": "dev", "user_id_hash": "a4ecde539acd", "model": "claude-sonnet-4-5", "level": "info", "ts": "2026-09-30T04:05:53.563480Z"}
+{"service": "api", "latency_ms": 151, "ttft_ms": 50, "tokens_in": 35, "tokens_out": 145, "cost_usd": 0.00228, "quality_score": 0.8, "tool_name": "retrieval", "tool_success": true, "payload": {"answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."}, "event": "response_sent", "session_id": "s_cp2b", "feature": "qa", "correlation_id": "req-cp2b-rollback2", "env": "dev", "user_id_hash": "a4ecde539acd", "model": "claude-sonnet-4-5", "level": "info", "ts": "2026-09-30T04:10:02.167081Z"}

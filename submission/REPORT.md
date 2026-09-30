@@ -18,7 +18,7 @@
 
 | Evidence | Đường dẫn |
 |---|---|
-| Pytest cuối | `evidence/01-pytest-cp1.txt` |
+| Pytest cuối | [`01-pytest-cp2b.txt`](evidence/01-pytest-cp2b.txt) |
 | Log validator | `evidence/02-log-validator.txt` |
 | Dashboard validator | [`03-dashboard-validator.txt`](evidence/03-dashboard-validator.txt) |
 | Structured log | `evidence/04-structured-log.txt` |
@@ -27,7 +27,7 @@
 | Trace waterfall | [`07-trace-waterfall.png`](evidence/07-trace-waterfall.png) (trace `9e18aad4fcb5f47130d5cbf02013d15d`: `lab-agent-run` 152 ms → `retrieval` 0 ms + `llm-generation` 151 ms) |
 | Trace metadata | [`08-trace-metadata.png`](evidence/08-trace-metadata.png) (root: `correlation_id=req-50ee8a6a`, prompt `day13-chat` v1 `production`), [`08b-generation-metadata.png`](evidence/08b-generation-metadata.png) (model, 213 tokens, $0.002775), [`08-trace-metadata.txt`](evidence/08-trace-metadata.txt). Dòng `scope.attributes.public_key` do SDK tự gắn đã được che đen |
 | Prompt versions | `evidence/09a-prompt-v1-production-baseline.png`, `evidence/09b-prompt-v2-candidate.png` |
-| Prompt rollback | `evidence/10-prompt-rollback.png` |
+| Prompt rollback | [`10a-prompt-promote.png`](evidence/10a-prompt-promote.png) (production → v2), [`10b-prompt-rollback.png`](evidence/10b-prompt-rollback.png) (production → v1), [`10-prompt-rollback.txt`](evidence/10-prompt-rollback.txt) |
 | Dashboard runtime | `evidence/11-dashboard-overview.png` |
 | Incident metric | `evidence/12-incident-metric.png` |
 | Incident log | `evidence/13-incident-log.png` |
@@ -39,7 +39,7 @@
 |---|---|---|---|
 | `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
 | `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | 6/6 ([log](evidence/03-dashboard-validator.txt)) | Dashboard contract đủ 6 panel |
-| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 30 passed ([log](evidence/01-pytest-cp1.txt)) | +8 test: PII (CCCD, thẻ, passport, câu 4 loại) và middleware |
+| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 32 passed ([log](evidence/01-pytest-cp2b.txt)) | +10 test: PII (CCCD, thẻ, passport, câu 4 loại), middleware, child observations |
 | Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | 20/20 ([list](evidence/06-trace-list.txt)) | Baseline: prompt `day13-chat` (label `production`) trả 404 → `local-fallback`. CP2a: 20 trace từ 2 lần load test, trace nào cũng có `lab-agent-run → {retrieval, llm-generation}`, `prompt_source=langfuse`, v1, generation có model/usage/cost, không có PII thô |
 | Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
 | Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | | 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt |
@@ -60,8 +60,8 @@
 - **Prompt name:** `day13-chat`
 - **Version/label baseline:** v1 — `baseline`, `production`
 - **Version/label candidate:** v2 — `candidate`
-- **Trace ID của mỗi version:**
-- **Cách promote và rollback `production`:**
+- **Trace ID của mỗi version:** Cùng một input, chỉ đổi label: v1 (`baseline`) → trace `618f8b03284480cd00e7e9db16cf38cf` (`req-cp2b-base4`, tokens_in=35); v2 (`candidate`) → trace `d2781bc812137e102351cfe9084ea34c` (`req-cp2b-cand5`, tokens_in=50, dài hơn vì v2 có thêm một dòng hướng dẫn) ([10](evidence/10-prompt-rollback.txt)).
+- **Cách promote và rollback `production`:** App chỉ hỏi Langfuse `get_prompt(name, label=LANGFUSE_PROMPT_LABEL)`, nên promote hay rollback đều là chuyển label `production` sang version khác trên Langfuse UI, không cần sửa code hay deploy. Prompt được cache 60 giây trong process. Sau khi hết TTL, SDK vẫn trả bản cũ (stale) trong lúc refresh nền, nên phải chờ hết cache cộng thêm một request, hoặc restart. Chứng minh bằng 3 trace cùng input với label `production`: `210cb201102ea70f6838cb9be77efc91` (`req-cp2b-prod1`, v1) → promote → `520149704ae014b7b3113d4834d27c60` (`req-cp2b-promote`, v2) → rollback → `fc437654b400758e76a2ea91734c78d0` (`req-cp2b-rollback2`, v1). Request `req-cp2b-rollback` ngay sau khi hết TTL vẫn nhận v2 (stale), điều này cũng được ghi trong evidence ([10a](evidence/10a-prompt-promote.png), [10b](evidence/10b-prompt-rollback.png), [10](evidence/10-prompt-rollback.txt)).
 
 ## 6. Dashboard, SLO và alerts
 
@@ -87,9 +87,9 @@
 
 ## 8. Giải thích và tự đánh giá
 
-- **Một quyết định kỹ thuật quan trọng và lý do:**
-- **Một lỗi/blocker đã gặp:** Mọi request đều log `Prompt not found: 'day13-chat' with label 'production'` (404) nên app dùng `prompt_source=local-fallback`; vì prompt không được cache, mỗi request tốn thêm một lần gọi Langfuse, làm tăng latency.
-- **Cách tìm nguyên nhân và xử lý:** Đọc log uvicorn khi chạy load test baseline, thấy lỗi 404 lặp lại ở từng request. Sẽ xử lý ở CP2b bằng cách tạo prompt `day13-chat` với label `production` trên project Langfuse cá nhân.
+- **Một quyết định kỹ thuật quan trọng và lý do:** SDK Langfuse tự gắn `scope.attributes.public_key` (cùng các thuộc tính OTel `resourceAttributes.*`) vào metadata của mọi observation. Khi xuất metadata trace ra evidence text, tôi lọc bỏ `scope.*`/`resourceAttributes.*`/`public_key`, và che key trong ảnh chụp, vì quy định cấm screenshot/evidence lộ public hay secret key.
+- **Một lỗi/blocker đã gặp:** Mọi request đều log `Prompt not found: 'day13-chat' with label 'production'` (404) nên app dùng `prompt_source=local-fallback`; vì prompt không được cache, mỗi request tốn thêm một lần gọi Langfuse, làm tăng latency. (2) Ở CP2b, mạng tới `cloud.langfuse.com` chập chờn, nên lần fetch prompt đầu tiên sau restart vượt `fetch_timeout_seconds=2` và rơi về `local-fallback`. App vẫn trả 200 và metadata ghi rõ `prompt_source`. Ngoài ra, OTLP span export bị timeout nên mất một số trace: 21 request thì 8 trace mất và 4 lần fallback, tất cả đều ghi trong [10](evidence/10-prompt-rollback.txt).
+- **Cách tìm nguyên nhân và xử lý:** Đọc log uvicorn khi chạy load test baseline, thấy lỗi 404 lặp lại ở từng request. Sẽ xử lý ở CP2b bằng cách tạo prompt `day13-chat` với label `production` trên project Langfuse cá nhân. Lỗi 404 đã hết sau khi tạo prompt `day13-chat` (v1 production/baseline, v2 candidate) trên Langfuse. (2) Log uvicorn có `Error while fetching prompt ...: timed out` và `Failed to export spans batch due to timeout`. Tôi đo trực tiếp `get_prompt` với timeout dài thì thấy kết nối đầu tiên mất 8–64 giây, các lần sau chỉ khoảng 1 giây. Cách xử lý: gửi request warm-up sau mỗi lần restart; đổi label dựa vào cache TTL 60 giây thay vì restart; kiểm tra trace đã lên Langfuse rồi mới tắt server, vì `taskkill /F` bỏ qua bước flush.
 - **Cách hiểu luồng Metrics → Logs → Traces:**
 - **Vai trò của prompt version, token/cost, SLO hoặc rollback trong vận hành LLM:**
 - **Điều quan trọng nhất đã học:**
