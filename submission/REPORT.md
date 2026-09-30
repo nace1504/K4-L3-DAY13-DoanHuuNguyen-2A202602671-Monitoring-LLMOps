@@ -8,7 +8,7 @@
 - **MSSV:** 2A202602671
 - **Lớp:** K4-L3B
 - **Repository URL:** https://github.com/nace1504/K4-L3-DAY13-DoanHuuNguyen-2A202602671-Monitoring-LLMOps
-- **Commit SHA cuối:**
+- **Commit SHA cuối:** `31b3564e0c48dc88a22d0611e84dd30f16ada28d` (commit `docs(cp4): final report and verification`, chứa toàn bộ code và evidence). SHA nộp LMS là commit cuối cùng chứa dòng này (commit `docs: record final commit SHA`, xem `git log -1`), vì một commit không thể tự ghi SHA của chính nó.
 - **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1` (Cohort K4)
 - **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602671`
 
