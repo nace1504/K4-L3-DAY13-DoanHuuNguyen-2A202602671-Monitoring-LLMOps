@@ -229,6 +229,21 @@ Không bắt đầu bằng cách đoán root cause hoặc mở trace ngẫu nhi�
 
 Không tự tạo, sửa, chia sẻ hoặc lấy `config/challenge.json` từ lớp khác. Nếu chưa nhận file riêng, tiếp tục practice bằng tham số `--scenario`; không chạy challenge chính thức.
 
+## Dashboard
+
+`scripts/build_dashboard.py` vẽ 6 panel của `config/dashboard.yaml` (title, time range, refresh, threshold) từ `data/logs.jsonl` ra một ảnh PNG và in bảng OK/BREACH. Cần `matplotlib` (đã có trong `requirements.txt`).
+
+```bash
+python scripts/build_dashboard.py                  # 60 phút gần nhất → submission/evidence/11-dashboard-overview.png
+python scripts/build_dashboard.py --watch          # vẽ lại mỗi refresh_seconds (30 s)
+python scripts/build_dashboard.py --start 2026-09-30T11:33:00+07:00 --end 2026-09-30T04:38:00Z \
+  --out submission/evidence/12-incident-metric.png  # khoảng tùy chọn, giờ UTC (Z) hoặc giờ VN (+07:00)
+python scripts/build_dashboard.py --start ... --marker "2026-09-30T04:34:12Z=incident injected" \
+  --extra-threshold "latency=2000:challenge threshold"  # đường mốc sự kiện và ngưỡng bổ sung
+```
+
+Cửa sổ ≤ 15 phút dùng bucket 10 giây, còn lại bucket 1 phút.
+
 ## Kiểm tra trước khi nộp
 
 ```bash
