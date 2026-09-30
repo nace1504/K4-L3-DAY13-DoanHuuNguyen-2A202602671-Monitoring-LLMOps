@@ -20,7 +20,7 @@
 |---|---|
 | Pytest cuối | `evidence/01-pytest-cp1.txt` |
 | Log validator | `evidence/02-log-validator.txt` |
-| Dashboard validator | `evidence/03-dashboard-validator.png` |
+| Dashboard validator | [`03-dashboard-validator.txt`](evidence/03-dashboard-validator.txt) |
 | Structured log | `evidence/04-structured-log.txt` |
 | PII redaction | `evidence/05-pii-redaction.txt` |
 | Trace list | [`06-trace-list.png`](evidence/06-trace-list.png) (lọc `name:lab-agent-run`, Total 41 trace), [`06b-trace-list-columns.png`](evidence/06b-trace-list-columns.png), [`06-trace-list.txt`](evidence/06-trace-list.txt) |
@@ -38,7 +38,7 @@
 | Nội dung | Baseline | Kết quả cuối | Nhận xét |
 |---|---|---|---|
 | `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
-| `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | | Dashboard contract đủ 6 panel |
+| `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | 6/6 ([log](evidence/03-dashboard-validator.txt)) | Dashboard contract đủ 6 panel |
 | `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 30 passed ([log](evidence/01-pytest-cp1.txt)) | +8 test: PII (CCCD, thẻ, passport, câu 4 loại) và middleware |
 | Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | 20/20 ([list](evidence/06-trace-list.txt)) | Baseline: prompt `day13-chat` (label `production`) trả 404 → `local-fallback`. CP2a: 20 trace từ 2 lần load test, trace nào cũng có `lab-agent-run → {retrieval, llm-generation}`, `prompt_source=langfuse`, v1, generation có model/usage/cost, không có PII thô |
 | Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
