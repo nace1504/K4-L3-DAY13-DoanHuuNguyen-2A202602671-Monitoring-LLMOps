@@ -1,0 +1,51 @@
+# PII redaction evidence
+# LƯU Ý: toàn bộ PII dưới đây là DỮ LIỆU TEST GIẢ, không phải thông tin thật.
+
+## Input gửi tới POST /chat (header x-request-id: req-pii00001)
+message: Email test.user@example.com, phone 0912 345 678, CCCD 001203004567, card 4111 1111 1111 1111
+
+## Log lines của req-pii00001 trong data/logs.jsonl (đã scrub trước khi ghi)
+{
+  "service": "api",
+  "payload": {
+    "message_preview": "Email [REDACTED_EMAIL], phone [REDACTED_PHONE_VN], CCCD [REDACTED_CCCD], card [R..."
+  },
+  "event": "request_received",
+  "correlation_id": "req-pii00001",
+  "user_id_hash": "c638561ee48d",
+  "env": "dev",
+  "model": "claude-sonnet-4-5",
+  "feature": "qa",
+  "session_id": "s_pii_test",
+  "level": "info",
+  "ts": "2026-09-30T02:48:21.579076Z"
+}
+{
+  "service": "api",
+  "latency_ms": 401,
+  "ttft_ms": 50,
+  "tokens_in": 43,
+  "tokens_out": 112,
+  "cost_usd": 0.001809,
+  "quality_score": 0.8,
+  "tool_name": "retrieval",
+  "tool_success": true,
+  "payload": {
+    "answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."
+  },
+  "event": "response_sent",
+  "correlation_id": "req-pii00001",
+  "user_id_hash": "c638561ee48d",
+  "env": "dev",
+  "model": "claude-sonnet-4-5",
+  "feature": "qa",
+  "session_id": "s_pii_test",
+  "level": "info",
+  "ts": "2026-09-30T02:48:21.982963Z"
+}
+
+## Kiểm tra toàn bộ data/logs.jsonl (23 records): số lần xuất hiện chuỗi gốc
+- "test.user@example.com": 0
+- "0912 345 678": 0
+- "001203004567": 0
+- "4111 1111 1111 1111": 0

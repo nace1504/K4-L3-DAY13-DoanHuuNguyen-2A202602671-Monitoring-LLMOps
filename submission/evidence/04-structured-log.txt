@@ -1,0 +1,44 @@
+# Structured log (data/logs.jsonl) — correlation_id=req-888228f4
+# request_received + response_sent của cùng một request, pretty-printed
+
+## request_received
+{
+  "service": "api",
+  "payload": {
+    "message_preview": "What is your refund policy? My email is [REDACTED_EMAIL]"
+  },
+  "event": "request_received",
+  "correlation_id": "req-888228f4",
+  "user_id_hash": "2055254ee30a",
+  "env": "dev",
+  "model": "claude-sonnet-4-5",
+  "feature": "qa",
+  "session_id": "s01",
+  "level": "info",
+  "ts": "2026-09-30T02:48:15.215178Z"
+}
+
+## response_sent
+{
+  "service": "api",
+  "latency_ms": 1182,
+  "ttft_ms": 50,
+  "tokens_in": 36,
+  "tokens_out": 128,
+  "cost_usd": 0.002028,
+  "quality_score": 0.9,
+  "tool_name": "retrieval",
+  "tool_success": true,
+  "payload": {
+    "answer_preview": "Starter answer. You should improve this output logic and add better quality chec..."
+  },
+  "event": "response_sent",
+  "correlation_id": "req-888228f4",
+  "user_id_hash": "2055254ee30a",
+  "env": "dev",
+  "model": "claude-sonnet-4-5",
+  "feature": "qa",
+  "session_id": "s01",
+  "level": "info",
+  "ts": "2026-09-30T02:48:16.807916Z"
+}

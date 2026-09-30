@@ -18,11 +18,11 @@
 
 | Evidence | Đường dẫn |
 |---|---|
-| Pytest cuối | `evidence/01-pytest.png` |
-| Log validator | `evidence/02-log-validator.png` |
+| Pytest cuối | `evidence/01-pytest-cp1.txt` |
+| Log validator | `evidence/02-log-validator.txt` |
 | Dashboard validator | `evidence/03-dashboard-validator.png` |
-| Structured log | `evidence/04-structured-log.png` |
-| PII redaction | `evidence/05-pii-redaction.png` |
+| Structured log | `evidence/04-structured-log.txt` |
+| PII redaction | `evidence/05-pii-redaction.txt` |
 | Trace list | `evidence/06-trace-list.png` |
 | Trace waterfall | `evidence/07-trace-waterfall.png` |
 | Trace metadata | `evidence/08-trace-metadata.png` |
@@ -37,20 +37,20 @@
 
 | Nội dung | Baseline | Kết quả cuối | Nhận xét |
 |---|---|---|---|
-| `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger |
+| `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
 | `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | | Dashboard contract đủ 6 panel |
-| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | | |
+| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 30 passed ([log](evidence/01-pytest-cp1.txt)) | +8 test: PII (CCCD, thẻ, passport, câu 4 loại) và middleware |
 | Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | | Prompt `day13-chat` (label `production`) trả 404 → `local-fallback` |
-| Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | | |
+| Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
 | Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | | 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt |
 | Retrieval success rate | 100% (10/10) ([metrics](evidence/baseline/baseline-metrics.txt)) | | |
 
 ## 4. Logging và PII
 
-- **Cách tạo/nhận và truyền correlation ID:**
-- **Các metadata được ghi vào structured log:**
-- **Cách bảo đảm PII được scrub trước khi ghi:**
-- **Cách kiểm chứng kết quả:**
+- **Cách tạo/nhận và truyền correlation ID:** `CorrelationIdMiddleware` gọi `clear_contextvars()` đầu mỗi request, nhận header `x-request-id` nếu khớp `^[A-Za-z0-9._-]{1,64}$`, ngược lại sinh `req-<8 hex>`. ID được `bind_contextvars` (structlog tự gắn vào mọi log line qua `merge_contextvars`), lưu vào `request.state.correlation_id` để truyền cho agent/response body, và trả lại qua header `x-request-id` cùng `x-response-time-ms`.
+- **Các metadata được ghi vào structured log:** `ts`, `level`, `service`, `event`, `correlation_id`; context từ `chat()`: `user_id_hash` (SHA-256 cắt 12 ký tự, không log `user_id` thô), `session_id`, `feature`, `model`, `env`; với `response_sent` thêm `latency_ms`, `ttft_ms`, `tokens_in/out`, `cost_usd`, `quality_score`, `tool_name`, `tool_success`.
+- **Cách bảo đảm PII được scrub trước khi ghi:** `scrub_event` được đăng ký trong chuỗi processor của structlog sau `TimeStamper` và trước `JsonlFileProcessor()`/`JSONRenderer()`. Processor chạy tuần tự, nên event dict đã được che trước khi được ghi xuống file hay stdout. Nó scrub mọi giá trị string ở top-level (trừ `ts`, `level`, `correlation_id`, `user_id_hash`, `session_id`) và đệ quy trong dict/list như `payload`. Pattern: email, thẻ, CCCD, SĐT VN, passport VN, xếp theo thứ tự email trước, rồi số dài trước số ngắn.
+- **Cách kiểm chứng kết quả:** `pytest` (30 passed, gồm `tests/test_pii.py` và `tests/test_middleware.py` mới); `scripts/validate_logs.py` đạt 100/100 trên log mới của load test + 1 request PII giả (`req-pii00001`); `grep` 4 chuỗi PII gốc trong `data/logs.jsonl` đều 0 lần xuất hiện.
 
 ## 5. Tracing và prompt versioning
 
