@@ -9,7 +9,7 @@
 - **Lớp:** K4-L3B
 - **Repository URL:** https://github.com/nace1504/K4-L3-DAY13-DoanHuuNguyen-2A202602671-Monitoring-LLMOps
 - **Commit SHA cuối:**
-- **Challenge ID:**
+- **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1` (Cohort K4)
 - **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602671`
 
 ## 2. Evidence index
@@ -18,7 +18,7 @@
 
 | Evidence | Đường dẫn |
 |---|---|
-| Pytest cuối | [`01-pytest-cp2c.txt`](evidence/01-pytest-cp2c.txt) |
+| Pytest cuối | [`01-pytest-cp3.txt`](evidence/01-pytest-cp3.txt) |
 | Log validator | `evidence/02-log-validator.txt` |
 | Dashboard validator | [`03-dashboard-validator.txt`](evidence/03-dashboard-validator.txt) |
 | Structured log | `evidence/04-structured-log.txt` |
@@ -29,9 +29,9 @@
 | Prompt versions | `evidence/09a-prompt-v1-production-baseline.png`, `evidence/09b-prompt-v2-candidate.png` |
 | Prompt rollback | [`10a-prompt-promote.png`](evidence/10a-prompt-promote.png) (production → v2), [`10b-prompt-rollback.png`](evidence/10b-prompt-rollback.png) (production → v1), [`10-prompt-rollback.txt`](evidence/10-prompt-rollback.txt) |
 | Dashboard runtime | [`11-dashboard-overview.png`](evidence/11-dashboard-overview.png) (sinh bằng `python scripts/build_dashboard.py` từ `data/logs.jsonl`, cửa sổ 60 phút 03:16–04:16 UTC, 71 request) |
-| Incident metric | `evidence/12-incident-metric.png` |
-| Incident log | `evidence/13-incident-log.png` |
-| Incident trace | `evidence/14-incident-trace.png` |
+| Incident metric | [`12-incident-metric.png`](evidence/12-incident-metric.png) (T0 → T_end+1m), [`12b-incident-recovery.png`](evidence/12b-incident-recovery.png) (tới T_recover+1m), [`12-incident-metric.txt`](evidence/12-incident-metric.txt) (bảng trước / trong / sau sự cố) |
+| Incident log | [`13-incident-log.png`](evidence/13-incident-log.png), [`13-incident-log.txt`](evidence/13-incident-log.txt) (`req-fdbdf646` bất thường vs `req-24c7372a` bình thường) |
+| Incident trace | [`14-incident-trace.png`](evidence/14-incident-trace.png), [`14-incident-trace.txt`](evidence/14-incident-trace.txt) (trace `b12ade0840eda52e75d4190081c8b969`: span `retrieval` 2.501 s) |
 
 ## 3. Kết quả kỹ thuật
 
@@ -39,7 +39,7 @@
 |---|---|---|---|
 | `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | 100/100 ([log](evidence/02-log-validator.txt)) | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger. CP1: 0 record thiếu field, 11 correlation ID (10 load test + 1 PII test) |
 | `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | 6/6 ([log](evidence/03-dashboard-validator.txt)) | Dashboard contract đủ 6 panel; dashboard runtime vẽ đúng 6 panel theo contract ([ảnh](evidence/11-dashboard-overview.png)) |
-| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 36 passed ([log](evidence/01-pytest-cp2c.txt)) | +14 test: PII (CCCD, thẻ, passport, câu 4 loại), middleware, child observations, hàm tổng hợp của dashboard |
+| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | 38 passed ([log](evidence/01-pytest-cp3.txt)) | +16 test: PII (CCCD, thẻ, passport, câu 4 loại), middleware, child observations, hàm tổng hợp / lọc khoảng thời gian / bucket của dashboard |
 | Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | 20/20 ([list](evidence/06-trace-list.txt)) | Baseline: prompt `day13-chat` (label `production`) trả 404 → `local-fallback`. CP2a: 20 trace từ 2 lần load test, trace nào cũng có `lab-agent-run → {retrieval, llm-generation}`, `prompt_source=langfuse`, v1, generation có model/usage/cost, không có PII thô |
 | Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | 0 ([log](evidence/05-pii-redaction.txt)) | Baseline 0 chỉ vì load test không có PII lọt qua `summarize_text`; CP1 đã test với request chứa đủ 4 loại PII giả |
 | Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | 6185 ms / 50 ms ([dashboard](evidence/11-dashboard-overview.png), 71 request trong 60 phút); riêng 50 request load test: 152 ms / 50 ms | Baseline: 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt. Cuối: P95 của cửa sổ vượt 3000 ms vì 9 request CP2b bị chậm (3909–11566 ms) do fetch prompt đầu tiên sau restart timeout; khi đã cache prompt, P95 còn khoảng 152 ms |
@@ -74,14 +74,14 @@
 
 ## 7. Điều tra challenge
 
-- **Challenge ID:**
-- **Khoảng thời gian điều tra:**
-- **Triệu chứng từ metrics:**
-- **Log line và correlation ID liên quan:**
-- **Trace ID và span gây ảnh hưởng:**
-- **Root cause:**
-- **Fix action:**
-- **Preventive measure:**
+- **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1` (Cohort K4)
+- **Khoảng thời gian điều tra:** 2026-09-30 04:33:49Z → 04:37:38Z (11:33:49 → 11:37:38 giờ VN). Trước sự cố: 04:33:49–04:34:12Z (11:33:49–11:34:12). Inject lúc 04:34:12Z (11:34:12). Trong sự cố: 04:34:12–04:34:51Z (11:34:12–11:34:51). Fix lúc 04:36:36Z (11:36:36). Kiểm tra hồi phục: 04:36:36–04:37:38Z (11:36:36–11:37:38).
+- **Triệu chứng từ metrics:** Chỉ có latency thay đổi. `latency_ms` P50/P95/P99 đi từ 151/154/154 ms lên 2652/2654/2654 ms (×17), bắt đầu từ bucket 04:34:10Z. Latency phía người dùng (client trong load_test) từ P50 775 ms lên 13,279 ms, max 13,283 ms. Các tín hiệu còn lại gần như không đổi: TTFT P95 50→50 ms, error 0%→0% (0 `request_failed`, 10/10 HTTP 200), retrieval success 100%→100%, tokens_out trung bình 128→144, cost/request $0.00203→$0.00227, quality 0.88→0.84. Không panel nào vượt threshold, vì P95 server 2654 ms < 3000, nhưng client latency vượt xa SLO 3000 ms ([12](evidence/12-incident-metric.png), [bảng](evidence/12-incident-metric.txt)).
+- **Log line và correlation ID liên quan:** Lọc `response_sent` có `latency_ms > 1000` trong khoảng sự cố: 10/10 bản ghi (trước sự cố 0/10). Request đại diện: `correlation_id=req-fdbdf646`, `response_sent` ts=2026-09-30T04:34:47.793Z, `latency_ms=2652`, `ttft_ms=50`, `tokens_in=37`, `tokens_out=129`, `cost_usd=0.002046`, `tool_success=true`, feature `monitoring`; client chờ 13,279.5 ms. Để so sánh, `req-24c7372a` (cùng câu hỏi, trước sự cố) có `latency_ms=154`. Timeline log cho thấy mỗi `request_received` chỉ bắt đầu sau `response_sent` của request trước, nên dù gửi song song 5 request, request thứ 5 phải chờ 4 × 2.65 s ([13](evidence/13-incident-log.txt)). [Ảnh 13](evidence/13-incident-log.png) cho thấy mỗi `request_received` chỉ bắt đầu khoảng 0–1 ms sau `response_sent` của request trước (ví dụ 04:34:16.180 → 04:34:16.181), dù load test gửi song song 5 request. Đây là bằng chứng server xử lý tuần tự.
+- **Trace ID và span gây ảnh hưởng:** Trace `b12ade0840eda52e75d4190081c8b969` (`req-fdbdf646`): root `lab-agent-run` 2.653 s = `retrieval` **2.501 s** + `llm-generation` 0.151 s. Trace bình thường `0fa016398add0401bc7419d064ecc21d` (`req-24c7372a`): `retrieval` 0.000 s, `llm-generation` 0.151 s. Span gây ảnh hưởng là `retrieval` (RETRIEVER): chậm ở 10/10 trace trong sự cố, chiếm khoảng 94% latency, level DEFAULT, không có status_message, doc_count=1. Generation giữ nguyên latency, usage, cost và prompt v1 ([14](evidence/14-incident-trace.txt)).
+- **Root cause:** Metric latency P95 tăng từ 154 lên 2654 ms (client từ 775 lên 13,279 ms) trong khi error, tokens và TTFT không đổi. Log `response_sent` của `req-fdbdf646` có `latency_ms=2652` (10/10 request trong khoảng). Trace `b12ade0840eda52e75d4190081c8b969` cho thấy span `retrieval` mất 2.501 s (bình thường 0.000 s), còn `llm-generation` không đổi. Vì vậy nguyên nhân là bước retrieval (RAG) chậm thêm khoảng 2.5 s mỗi request; nó chậm chứ không lỗi, nên error rate vẫn 0%. Độ chậm này bị khuếch đại thành 8–13 s phía người dùng vì server xử lý request tuần tự.
+- **Fix action:** Chạy `python scripts/inject_incident.py --disable` lúc 04:36:36Z (11:36:36 VN), `/health` báo mọi incident false. Chạy lại `load_test.py --challenge --concurrency 5` với cùng input: 5/5 HTTP 200, `latency_ms` P95 2654→152 ms, client P50 13,279→622 ms (max 774 ms), span `retrieval` 2.501→0.000 s (trace `69dba90203179cafee24db8146150550`, `req-b374e58a`), error vẫn 0% ([12b](evidence/12b-incident-recovery.png)).
+- **Preventive measure:** (1) **Alert:** với rule hiện tại, `HighLatencyP95` (docs/alerts.md#alert-1) **không bắn**, vì P95 server là 2654 ms < 3000 và sự cố chỉ kéo dài khoảng 40 giây, ngắn hơn duration 5m. Nếu sự cố kéo dài với cùng mức chậm, alert vẫn không bắn, vì `latency_ms` không tính thời gian chờ hàng đợi. Đề xuất: đo latency ở tầng middleware hoặc edge (header `x-response-time-ms` hay tại load balancer, gồm cả thời gian chờ) để đưa vào `HighLatencyP95`, và thêm rule `p95(retrieval span) > 1000ms for 2m` (warning), dẫn tới runbook alert-1 với bước "so span retrieval với llm-generation". Khi có latency phía người dùng, sự cố này (13 s > 3000 ms) sẽ bắn sau 5 phút theo rule hiện có, hoặc sau 2 phút với rule retrieval. (2) **Kỹ thuật:** đặt timeout cho retrieval (ví dụ 1 s) và fallback context ("No domain document matched…") kèm circuit breaker, để vector store chậm không kéo dài request; chạy phần xử lý blocking của `/chat` trong threadpool hoặc worker, để một request chậm không chặn các request khác (evidence: timeline tuần tự 2.65 s mỗi request). Thêm regression test: giả lập retrieval chậm, gửi 5 request song song, và assert latency client ≤ 1.5 × latency của một request.
 
 > Gợi ý cách viết ngắn, không thay cho evidence thực tế: "Metric cho thấy `[latency/error/cost/quality]` bất thường trong `[khoảng thời gian]`. Log line `[event]` có `correlation_id=[...]` đại diện cho request bị ảnh hưởng. Trace cùng `correlation_id` cho thấy span `[retrieval/generation/prompt/tool]` có dấu hiệu `[chậm/lỗi/token tăng]`. Root cause là `[nguyên nhân suy ra từ evidence]`. Fix action là `[hành động khôi phục]`; preventive measure là `[alert/runbook/test/guardrail để ngăn tái diễn]`."
 

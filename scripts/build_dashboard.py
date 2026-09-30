@@ -119,19 +119,27 @@ def summarize(records: list[dict], minutes: int) -> dict:
     }
 
 
-def minute_buckets(start: datetime, end: datetime) -> list[datetime]:
-    first = (start + timedelta(minutes=1)).replace(second=0, microsecond=0)
-    buckets, cur = [], first
+def bucket_seconds_for(start: datetime, end: datetime) -> int:
+    """1-minute buckets normally; 10-second buckets for short incident windows (<= 15 min)."""
+    return 10 if end - start <= timedelta(minutes=15) else 60
+
+
+def floor_ts(ts: datetime, seconds: int) -> datetime:
+    return datetime.fromtimestamp(int(ts.timestamp()) // seconds * seconds, tz=timezone.utc)
+
+
+def time_buckets(start: datetime, end: datetime, seconds: int) -> list[datetime]:
+    buckets, cur = [], floor_ts(start, seconds)
     while cur <= end:
         buckets.append(cur)
-        cur += timedelta(minutes=1)
+        cur += timedelta(seconds=seconds)
     return buckets
 
 
-def by_minute(records: list[dict]) -> dict[datetime, list[dict]]:
+def group_by_bucket(records: list[dict], seconds: int) -> dict[datetime, list[dict]]:
     grouped: dict[datetime, list[dict]] = {}
     for r in records:
-        grouped.setdefault(r["_ts"].replace(second=0, microsecond=0), []).append(r)
+        grouped.setdefault(floor_ts(r["_ts"], seconds), []).append(r)
     return grouped
 
 
@@ -170,12 +178,15 @@ def render(
     import matplotlib.pyplot as plt
 
     panels = cfg["panels_by_id"]
-    grouped = by_minute(records)
-    buckets = minute_buckets(start, end)
+    secs = bucket_seconds_for(start, end)
+    per = "min" if secs == 60 else f"{secs}s"
+    bar_width = secs / 86400 * 0.8
+    grouped = group_by_bucket(records, secs)
+    buckets = time_buckets(start, end, secs)
     active = [b for b in buckets if b in grouped]
 
     fig, axes = plt.subplots(2, 3, figsize=(21, 11.5), dpi=100)
-    fmt = lambda d: d.strftime("%Y-%m-%d %H:%M")  # noqa: E731
+    fmt = lambda d: d.strftime("%Y-%m-%d %H:%M" + (":%S" if secs < 60 else ""))  # noqa: E731
     window_label = window_label or f"last {cfg['time_range_minutes']} min"
     fig.suptitle(
         f"{cfg['title']} — {window_label} · refresh {cfg['refresh_seconds']}s\n"
@@ -201,7 +212,7 @@ def render(
 
     def minute_axis(ax) -> None:
         ax.set_xlim(start, end)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=timezone.utc))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M" + (":%S" if secs < 60 else ""), tz=timezone.utc))
         ax.set_xlabel("time (UTC)")
         ax.grid(alpha=0.3)
 
@@ -223,8 +234,10 @@ def render(
 
     # 2. Traffic
     ax = axes[0][1]
-    counts = [len([r for r in grouped.get(b, []) if r["event"] == "request_received"]) for b in buckets]
-    ax.bar(buckets, counts, width=1 / 1440 * 0.8, color="#1f77b4", label="request_received / min")
+    # Counts are scaled to req/min so the bars share the threshold's unit whatever the bucket size.
+    counts = [len([r for r in grouped.get(b, []) if r["event"] == "request_received"]) * 60 / secs for b in buckets]
+    ax.bar(buckets, counts, width=bar_width, color="#1f77b4",
+           label="request_received (req/min)" + ("" if secs == 60 else f", {secs}s buckets"))
     threshold_line(ax, "traffic", "req/min")
     ax.set_ylabel("requests per minute")
     status_text(ax, "traffic", f"{summary['requests']} requests · avg {summary['rate_per_minute']:.2f} req/min over window")
@@ -252,9 +265,9 @@ def render(
 
     # 4. Cost
     ax = axes[1][0]
-    ax.bar(active, [sum(r.get("cost_usd", 0) for r in resp[b]) for b in active], width=1 / 1440 * 0.8,
-           color="#9467bd", label="cost_usd / min")
-    ax.set_ylabel("cost per minute (USD)")
+    ax.bar(active, [sum(r.get("cost_usd", 0) for r in resp[b]) for b in active], width=bar_width,
+           color="#9467bd", label=f"cost_usd / {per}")
+    ax.set_ylabel(f"cost per {per} bucket (USD)")
     ax2 = ax.twinx()
     running, cum = 0.0, []
     for b in active:
@@ -290,7 +303,7 @@ def render(
     ax = axes[1][2]
     xs = [b for b in active if resp[b]]
     ax.plot(xs, [mean(r["quality_score"] for r in resp[b]) for b in xs], "-o", ms=4, color="#2ca02c",
-            label="mean quality_score / min")
+            label=f"mean quality_score / {per}")
     threshold_line(ax, "quality", "")
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("quality score (0–1)")
@@ -347,7 +360,7 @@ def build_once(
             raise SystemExit(f"--start must be before --end ({start:%H:%M:%S} >= {end:%H:%M:%S} UTC)")
         window = filter_range(records, start, end)
         minutes = (end - start).total_seconds() / 60
-        window_label = f"custom window {minutes:g} min"
+        window_label = f"custom window {minutes:.1f} min"
     else:
         window, start, end = filter_window(records, minutes, datetime.now(timezone.utc) if now else None)
     summary = summarize(window, minutes)

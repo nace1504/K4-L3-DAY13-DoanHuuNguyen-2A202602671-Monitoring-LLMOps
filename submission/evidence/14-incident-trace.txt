@@ -1,0 +1,44 @@
+# CP3 — Incident trace (Traces layer)
+# Nguồn: Langfuse GET /api/public/v2/observations; đã bỏ scope.* / resourceAttributes.* / public_key.
+
+                            correlation_id trace_id                              root  retrieval  generation  tokens in/out  cost
+BẤT THƯỜNG (trong sự cố)    req-fdbdf646   b12ade0840eda52e75d4190081c8b969    2.653s     2.501s      0.151s  37/129  0.002046
+BÌNH THƯỜNG (trước sự cố)   req-24c7372a   0fa016398add0401bc7419d064ecc21d    0.152s       0.0s      0.151s  35/141  0.00222
+SAU FIX                     req-b374e58a   69dba90203179cafee24db8146150550    0.152s       0.0s      0.151s  36/161  0.002523
+
+Link (bất thường): https://cloud.langfuse.com/project/cmunho1630hxdad0cptc9shru/traces/b12ade0840eda52e75d4190081c8b969
+Link (bình thường): https://cloud.langfuse.com/project/cmunho1630hxdad0cptc9shru/traces/0fa016398add0401bc7419d064ecc21d
+Link (sau fix): https://cloud.langfuse.com/project/cmunho1630hxdad0cptc9shru/traces/69dba90203179cafee24db8146150550
+
+## BẤT THƯỜNG (trong sự cố) — req-fdbdf646 — trace b12ade0840eda52e75d4190081c8b969
+{"name": "lab-agent-run", "type": "AGENT", "startTime": "2026-09-30T04:34:45.140000Z", "endTime": "2026-09-30T04:34:47.793000Z", "latency": 2.653, "level": "DEFAULT", "statusMessage": "", "model": "", "usageDetails": {}, "costDetails": {}, "promptName": "", "promptVersion": null, "metadata": {"correlation_id": "req-fdbdf646", "model": "claude-sonnet-4-5", "feature": "monitoring", "prompt_fetch_error": "", "prompt_source": "langfuse", "prompt_version": 1, "prompt_label": "production", "prompt_name": "day13-chat", "query_preview": "Explain why metrics traces and logs work together.", "doc_count": 1}}
+{"name": "retrieval", "type": "RETRIEVER", "startTime": "2026-09-30T04:34:45.140000Z", "endTime": "2026-09-30T04:34:47.641000Z", "latency": 2.501, "level": "DEFAULT", "statusMessage": "", "model": "", "usageDetails": {}, "costDetails": {}, "promptName": "", "promptVersion": null, "metadata": {"correlation_id": "req-fdbdf646", "model": "claude-sonnet-4-5", "feature": "monitoring"}}
+{"name": "llm-generation", "type": "GENERATION", "startTime": "2026-09-30T04:34:47.641000Z", "endTime": "2026-09-30T04:34:47.792000Z", "latency": 0.151, "level": "DEFAULT", "statusMessage": "", "model": "claude-sonnet-4-5", "usageDetails": {"input": 37, "output": 129, "total": 166}, "costDetails": {"input": 0.000111, "output": 0.001935, "total": 0.002046}, "promptName": "day13-chat", "promptVersion": 1, "metadata": {"correlation_id": "req-fdbdf646", "model": "claude-sonnet-4-5", "feature": "monitoring", "ttft_ms": 50}}
+
+## BÌNH THƯỜNG (trước sự cố) — req-24c7372a — trace 0fa016398add0401bc7419d064ecc21d
+{"name": "lab-agent-run", "type": "AGENT", "startTime": "2026-09-30T04:34:01.346000Z", "endTime": "2026-09-30T04:34:01.498000Z", "latency": 0.152, "level": "DEFAULT", "statusMessage": "", "model": "", "usageDetails": {}, "costDetails": {}, "promptName": "", "promptVersion": null, "metadata": {"correlation_id": "req-24c7372a", "model": "claude-sonnet-4-5", "feature": "qa", "prompt_fetch_error": "", "prompt_source": "langfuse", "prompt_version": 1, "prompt_label": "production", "prompt_name": "day13-chat", "query_preview": "Explain why metrics traces and logs work together", "doc_count": 1}}
+{"name": "retrieval", "type": "RETRIEVER", "startTime": "2026-09-30T04:34:01.347000Z", "endTime": "2026-09-30T04:34:01.347000Z", "latency": 0.0, "level": "DEFAULT", "statusMessage": "", "model": "", "usageDetails": {}, "costDetails": {}, "promptName": "", "promptVersion": null, "metadata": {"correlation_id": "req-24c7372a", "model": "claude-sonnet-4-5", "feature": "qa"}}
+{"name": "llm-generation", "type": "GENERATION", "startTime": "2026-09-30T04:34:01.347000Z", "endTime": "2026-09-30T04:34:01.498000Z", "latency": 0.151, "level": "DEFAULT", "statusMessage": "", "model": "claude-sonnet-4-5", "usageDetails": {"input": 35, "output": 141, "total": 176}, "costDetails": {"input": 0.000105, "output": 0.002115, "total": 0.00222}, "promptName": "day13-chat", "promptVersion": 1, "metadata": {"correlation_id": "req-24c7372a", "model": "claude-sonnet-4-5", "feature": "qa", "ttft_ms": 50}}
+
+## Span retrieval: 10 request trong sự cố + 2 trước sự cố + 3 sau fix
+correlation_id trace_id                            retrieval  generation    root
+req-24c7372a   0fa016398add0401bc7419d064ecc21d         0.0s      0.151s  0.152s
+req-12dfebc6   a1b156c810a0c1cd400b24081322ef66         0.0s      0.152s  0.153s
+req-fdbdf646   b12ade0840eda52e75d4190081c8b969       2.501s      0.151s  2.653s
+req-c8a0455c   d8f1c012bcce1c4503a0a9b72f1cb88c       2.502s      0.151s  2.654s
+req-bd7b830d   97a107d268283f284a3bbe99b06aaa21       2.501s      0.151s  2.653s
+req-11ba5715   ab7887380d9f098a78214e1e92852753       2.501s      0.151s  2.654s
+req-d156cc1d   22f79bb0cacc7891fef6f2df0b1ac7a7       2.502s      0.151s  2.653s
+req-c0100ea6   1af1dbd016c83527903856c1918526b7       2.503s      0.152s  2.655s
+req-a6390d91   991d2ad87be45609cbd31f02b0fdeaaf       2.501s      0.152s  2.653s
+req-32d3c3b5   4422215749e1b62a05e814da6d79d97a       2.501s      0.151s  2.653s
+req-306d062e   9bde0b7da1d87694f154e53554874f9d       2.501s      0.151s  2.652s
+req-92746dc9   ac781f7b5ebfa7e62fea30397ce053a6       2.502s      0.152s  2.654s
+req-b374e58a   69dba90203179cafee24db8146150550         0.0s      0.151s  0.152s
+req-ba7e8c01   64f8911bf446cbd14cc3ac16c5a86213         0.0s      0.151s  0.151s
+req-0bf7cc9a   cb90c508510488de49e20231cc09f255         0.0s      0.152s  0.152s
+
+## Kết luận lớp trace
+- Khác biệt DUY NHẤT nằm ở span retrieval (RETRIEVER): 0.000 s (bình thường) → 2.501 s (sự cố), lặp lại ở 10/10 trace trong sự cố; về 0.000 s sau fix.
+- retrieval chiếm 2.501 / 2.653 s ≈ 94% latency của root lab-agent-run; llm-generation giữ nguyên 0.151 s, usage/cost cùng mức, prompt day13-chat v1 (langfuse).
+- Không span nào có level ERROR hay statusMessage, root vẫn ghi doc_count=1 ⇒ retrieval CHẬM chứ không LỖI, nên error rate / retrieval success không đổi.

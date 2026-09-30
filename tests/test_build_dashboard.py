@@ -93,3 +93,16 @@ def test_start_end_range_accepts_utc_and_vietnam_time(tmp_path: Path) -> None:
     summary = dash.summarize(window, minutes=(end - start).total_seconds() / 60)
     assert summary["requests"] == 3
     assert summary["rate_per_minute"] == 1.5
+
+
+def test_short_windows_use_10s_buckets_including_first_partial_bucket() -> None:
+    start = datetime(2026, 9, 30, 4, 33, 49, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 30, 4, 35, 50, tzinfo=timezone.utc)
+
+    secs = dash.bucket_seconds_for(start, end)
+    buckets = dash.time_buckets(start, end, secs)
+
+    assert secs == 10
+    assert dash.bucket_seconds_for(start, start.replace(hour=5, minute=34)) == 60
+    assert buckets[0] == datetime(2026, 9, 30, 4, 33, 40, tzinfo=timezone.utc)
+    assert buckets[-1] == datetime(2026, 9, 30, 4, 35, 50, tzinfo=timezone.utc)

@@ -1,0 +1,51 @@
+# CP3 — Incident metric (Metrics layer)
+# Challenge: day13-k4-l3b-monitoring-llmops-v1 | Cohort: K4 (từ output của scripts/load_test.py --challenge)
+
+## Mốc thời gian (UTC | giờ VN = UTC+7)
+T0        2026-09-30 04:33:49Z | 11:33:49  GET /health: rag_slow/tool_fail/cost_spike = false
+T1        2026-09-30 04:34:02Z | 11:34:02  xong load test bình thường (python scripts/load_test.py --concurrency 5, 10 request, 10×HTTP 200)
+T_inject  2026-09-30 04:34:12Z | 11:34:12  python scripts/inject_incident.py → output: 200 {'ok': True, 'incidents': {'rag_slow': True, 'tool_fail': False, 'cost_spike': False}}
+          (chỉ ghi lại như thao tác đã làm; kết luận bên dưới dựa trên metric/log/trace, không dựa trên tên incident)
+T_end     2026-09-30 04:34:50Z | 11:34:50  xong 2 lần python scripts/load_test.py --challenge --concurrency 5 (10 request, 10×HTTP 200, 0 mã lỗi HTTP)
+T_fix     2026-09-30 04:36:36Z | 11:36:36  python scripts/inject_incident.py --disable → 200 {'ok': True, 'incidents': {'rag_slow': False, 'tool_fail': False, 'cost_spike': False}}
+T_recover 2026-09-30 04:36:38Z | 11:36:38  xong load test --challenge sau fix (5 request, 5×HTTP 200)
+
+## So sánh tín hiệu (nguồn: data/logs.jsonl; latency client lấy từ output load_test)
+Windows (start inclusive, end exclusive):
+  before     04:33:49–04:34:12 UTC  (11:33:49–11:34:12 giờ VN)
+  during     04:34:12–04:34:51 UTC  (11:34:12–11:34:51 giờ VN)
+  after_fix  04:36:36–04:37:38 UTC  (11:36:36–11:37:38 giờ VN)
+
+signal                                          before                during             after_fix
+request_received (count)                            10                    10                     5
+HTTP status (client)                               200                   200                   200
+latency_ms P50 (server, log)                     151.0                2652.0                 151.0
+latency_ms P95 (server, log)                     154.0                2654.0                 152.0
+latency_ms P99 (server, log)                     154.0                2654.0                 152.0
+latency client P50 (load_test)                     775                 13279                   622
+latency client max (load_test)                     777                 13283                   774
+TTFT P95 (ms)                                     50.0                  50.0                  50.0
+error rate %                                       0.0                   0.0                   0.0
+error_type breakdown                              none                  none                  none
+retrieval success %                              100.0                 100.0                 100.0
+tokens_in avg                                     36.0                  37.0                  37.0
+tokens_out avg                                   128.4                 143.7                 128.4
+cost_usd avg                                  0.002034              0.002267              0.002037
+cost_usd total                                 0.02034              0.022665              0.010185
+quality_score avg                                 0.88                  0.84                  0.84
+
+## Panel vượt threshold?
+- Không panel nào vượt threshold của config/dashboard.yaml: latency P95 (server latency_ms) 2654 ms <= 3000; error 0% <= 2; traffic >= 1;
+  cost $0.0227 <= 2.5; tokens <= 50,000; quality 0.84 >= 0.75.
+- Nhưng panel Latency có bước nhảy rõ: P50/P95 từ 151/154 ms lên 2652/2654 ms (x17.2), bắt đầu từ bucket 04:34:10Z (11:34:10 VN).
+  Response chậm đầu tiên lúc 04:34:16.180Z (req-c8a0455c, latency_ms=2652), kéo dài tới request cuối 04:34:50Z; hồi phục từ 04:36:37Z (P95 152 ms).
+- Người dùng chịu nặng hơn con số server: latency phía client (load_test) P50 775 ms → 13,279 ms, max 13,283 ms, vượt xa SLO 3000 ms.
+  latency_ms của server chỉ đo thời gian xử lý từng request (~2.65 s), không gồm thời gian chờ hàng đợi (13-incident-log.txt: request được xử lý tuần tự).
+- Tín hiệu khác gần như không đổi: TTFT P95 50 → 50 ms, error 0% → 0%, retrieval success 100% → 100%, tokens_in 36 → 37, tokens_out 128 → 144,
+  cost/request $0.00203 → $0.00227, quality 0.88 → 0.84 (bộ câu hỏi challenge khác bộ bình thường). ⇒ Triệu chứng duy nhất: LATENCY.
+
+## GET /metrics (snapshot trong process, cộng dồn từ lúc uvicorn khởi động 04:05Z — không chỉ riêng khoảng sự cố)
+trong sự cố: {"traffic":75,"latency_p50":151.0,"latency_p95":2652.0,"latency_p99":3909.0,"ttft_p95":50.0,"avg_cost_usd":0.0021,"total_cost_usd":0.1593,"tokens_in_total":2765,"tokens_out_total":10065,"error_breakdown":{},"quality_avg":0.8693}
+sau fix:     {"traffic":80,"latency_p50":151.0,"latency_p95":2652.0,"latency_p99":3909.0,"ttft_p95":50.0,"avg_cost_usd":0.0021,"total_cost_usd":0.1695,"tokens_in_total":2950,"tokens_out_total":10707,"error_breakdown":{},"quality_avg":0.8675}
+
+Ảnh: 12-incident-metric.png (T0 → T_end+1m, bucket 10s), 12b-incident-recovery.png (T0 → T_recover+1m, bucket 10s).
