@@ -4,13 +4,13 @@
 
 ## 1. Thông tin học viên
 
-- **Họ và tên:**
-- **MSSV:**
+- **Họ và tên:** Doãn Hữu Nguyên
+- **MSSV:** 2A202602671
 - **Lớp:** K4-L3B
-- **Repository URL:**
+- **Repository URL:** https://github.com/nace1504/K4-L3-DAY13-DoanHuuNguyen-2A202602671-Monitoring-LLMOps
 - **Commit SHA cuối:**
 - **Challenge ID:**
-- **Tên project Langfuse cá nhân:** `day13-k4-l3b-<MSSV>`
+- **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602671`
 
 ## 2. Evidence index
 
@@ -37,13 +37,13 @@
 
 | Nội dung | Baseline | Kết quả cuối | Nhận xét |
 |---|---|---|---|
-| `validate_logs.py` | | | |
-| `validate_dashboard.py` | | | |
-| `pytest` | | | |
-| Số traces hợp lệ | | | |
-| Số PII leak | | | |
-| Latency P95 / TTFT P95 | | | |
-| Retrieval success rate | | | |
+| `validate_logs.py` | 30/100 ([log](evidence/baseline/baseline-validate-logs.txt)) | | 20/21 record thiếu required field và enrichment; `correlation_id` MISSING (0 unique ID) do middleware chưa sinh/bind context vào logger |
+| `validate_dashboard.py` | 6/6 ([log](evidence/baseline/baseline-validate-dashboard.txt)) | | Dashboard contract đủ 6 panel |
+| `pytest` | 22 passed ([log](evidence/baseline/baseline-pytest.txt)) | | |
+| Số traces hợp lệ | chưa tính (chưa có child span, prompt fallback) | | Prompt `day13-chat` (label `production`) trả 404 → `local-fallback` |
+| Số PII leak | 0 ([log](evidence/baseline/baseline-validate-logs.txt)) | | |
+| Latency P95 / TTFT P95 | 1863 ms / 50 ms ([metrics](evidence/baseline/baseline-metrics.txt)) | | 10 request; P50 585 ms; mỗi request tốn thêm 1 lần gọi Langfuse do không cache được prompt |
+| Retrieval success rate | 100% (10/10) ([metrics](evidence/baseline/baseline-metrics.txt)) | | |
 
 ## 4. Logging và PII
 
@@ -88,8 +88,8 @@
 ## 8. Giải thích và tự đánh giá
 
 - **Một quyết định kỹ thuật quan trọng và lý do:**
-- **Một lỗi/blocker đã gặp:**
-- **Cách tìm nguyên nhân và xử lý:**
+- **Một lỗi/blocker đã gặp:** Mọi request đều log `Prompt not found: 'day13-chat' with label 'production'` (404) nên app dùng `prompt_source=local-fallback`; vì prompt không được cache, mỗi request tốn thêm một lần gọi Langfuse, làm tăng latency.
+- **Cách tìm nguyên nhân và xử lý:** Đọc log uvicorn khi chạy load test baseline, thấy lỗi 404 lặp lại ở từng request. Sẽ xử lý ở CP2b bằng cách tạo prompt `day13-chat` với label `production` trên project Langfuse cá nhân.
 - **Cách hiểu luồng Metrics → Logs → Traces:**
 - **Vai trò của prompt version, token/cost, SLO hoặc rollback trong vận hành LLM:**
 - **Điều quan trọng nhất đã học:**
